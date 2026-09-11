@@ -6,6 +6,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 import pytest
 
@@ -284,15 +285,37 @@ def test_readonly_ledger_falls_back_to_immutable_without_wal(tmp_path, monkeypat
 
     def connect(database, **kw):
         uris.append(database)
-        if "immutable" not in database:
-            raise sqlite3.OperationalError("attempt to write a readonly database")
+        # The run directory is "read-only": a plain open there fails, a copy elsewhere works.
+        if str(path) in database and "immutable" not in database:
+            raise sqlite3.OperationalError("unable to open database file")
         return real_connect(database, **kw)
 
     monkeypatch.setattr(sqlite3, "connect", connect)
     assert _open_readonly(path).execute("SELECT x FROM t").fetchall() == [(1,)]
     assert len(uris) == 2 and "immutable=1" in uris[1]
 
-    # With a -wal present the fallback would miss rows, so the error propagates.
-    (tmp_path / "ledger.sqlite-wal").write_bytes(b"")
-    with pytest.raises(sqlite3.OperationalError):
-        _open_readonly(path)
+    # With a -wal present (worker running, or killed before its checkpoint), the
+    # database and WAL are copied to a private directory and read there, so the
+    # un-checkpointed row is seen too.
+    writer = real_connect(path, isolation_level=None)
+    writer.execute("PRAGMA journal_mode=WAL")
+    writer.execute("INSERT INTO t VALUES (2)")
+    assert (tmp_path / "ledger.sqlite-wal").exists()
+    uris.clear()
+    db = _open_readonly(path)
+    assert db.execute("SELECT x FROM t ORDER BY x").fetchall() == [(1,), (2,)]
+    assert "immutable" not in uris[-1] and str(tmp_path) not in uris[-1]
+    copy_dir = Path(uris[-1].split("file:")[1].split("?")[0]).parent
+    assert (copy_dir / "ledger.sqlite-wal").exists()
+    db.close()
+    # Unchanged files reuse the copy; a new write refreshes it.
+    db = _open_readonly(path)
+    assert Path(uris[-1].split("file:")[1].split("?")[0]).parent == copy_dir
+    db.close()
+    writer.execute("INSERT INTO t VALUES (3)")
+    db = _open_readonly(path)
+    assert db.execute("SELECT count(*) FROM t").fetchone() == (3,)
+    assert Path(uris[-1].split("file:")[1].split("?")[0]).parent != copy_dir
+    assert not copy_dir.exists()
+    db.close()
+    writer.close()
