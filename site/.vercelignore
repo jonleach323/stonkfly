@@ -1,0 +1,6 @@
+.vercelignore
+api/*.test.js
+tools/
+*.md
+__pycache__/
+*.pyc

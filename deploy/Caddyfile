@@ -1,0 +1,5 @@
+# Serves the watch page over HTTPS at WATCH_DOMAIN (set in .env). Caddy fetches the certificate itself.
+{$WATCH_DOMAIN} {
+	reverse_proxy watch:8787
+	encode zstd gzip
+}

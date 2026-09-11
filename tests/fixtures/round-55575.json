@@ -1,0 +1,215 @@
+{
+ "data": {
+  "id": 55575,
+  "address": "8Pa5vVYGbPTeKQ38wUAkc6w3iBi3DnY6b4X35UFCQdXH",
+  "state": "finished",
+  "winning_tile": 20,
+  "is_sat_strike": false,
+  "is_hashrate_boosted": false,
+  "miners_count": 77,
+  "settled_miners": 77,
+  "winners_count": 68,
+  "total_deployed_usd": "479755692",
+  "total_gross_deployed_usd": "510378457",
+  "total_pot_usd": "435281965",
+  "total_pot_btc": "57742",
+  "total_pot_combined_usd": 479.6635209837872,
+  "strike_bonus_usd": "0",
+  "strike_bonus_btc": "0",
+  "strike_bonus_combined_usd": 0.0,
+  "strike_epoch_usd": "0",
+  "strike_epoch_btc": "0",
+  "strike_reserve_usd": "0",
+  "strike_reserve_btc": "0",
+  "strike_seed_from_reserve_usd": "0",
+  "strike_seed_from_reserve_btc": "0",
+  "strike_fee_usd": "10615884",
+  "epoch_fee_usd": "9901355",
+  "one_btc_fee_usd": "2449829",
+  "protocol_fee_usd": "5041343",
+  "affiliate_fee_usd": "62452",
+  "buybacks_fee_usd": "2551902",
+  "minted_token": "155137082",
+  "strike_token_fee": "21719193",
+  "strike_bonus_token": "0",
+  "strike_epoch_token": "0",
+  "strike_reserve_token": "0",
+  "strike_seed_from_reserve_token": "0",
+  "deployed_at": "2026-09-11T03:39:46Z",
+  "started_at": "2026-09-11T03:39:48Z",
+  "settled_at": "2026-09-11T03:40:52Z",
+  "deployments": [
+   {
+    "authority": "2Gk1yQTVXPYNyuA5m1ngnG1aV3LqfeTKhJJ9QMKFFBMS",
+    "deployment": "9sYbj2zEn5f2gvd9vgyArY872d2rXupkg4WZUGPGd8ja",
+    "deployed_usd_amount": "59449000",
+    "total_usd_stake_amount": "55882058",
+    "winning_usd_stake_amount": "0",
+    "selected_tiles": 949118,
+    "is_automation": true,
+    "is_grubstake_funded": false,
+    "is_won": false,
+    "usd_earned": "52909590",
+    "sats_shares_earned": "0",
+    "btc_earned": "0",
+    "btc_earned_usd": 0.0,
+    "token_earned": "3017173",
+    "token_earned_usd": 0.15261967160604917,
+    "token_shares_earned": "2470265973",
+    "hashrate_earned": "6028",
+    "deployed_at": "2026-09-11T03:39:51Z",
+    "settled_at": "2026-09-11T03:40:55Z"
+   },
+   {
+    "authority": "9SL9PHbdixQFyMS5npowKXLdXUWwYReHKuyBrFdFCRxc",
+    "deployment": "52pAHuLiybuoF53aB4Nd5Cc8CyMtGHJGcH7Y7Y63fRhc",
+    "deployed_usd_amount": "50000000",
+    "total_usd_stake_amount": "47000000",
+    "winning_usd_stake_amount": "2238095",
+    "selected_tiles": 2097151,
+    "is_automation": true,
+    "is_grubstake_funded": false,
+    "is_won": true,
+    "usd_earned": "42380940",
+    "sats_shares_earned": "3259651",
+    "btc_earned": "6455",
+    "btc_earned_usd": 4.9612825254093575,
+    "token_earned": "13516595",
+    "token_earned_usd": 0.6837189283252787,
+    "token_shares_earned": "11066513160",
+    "hashrate_earned": "5050",
+    "deployed_at": "2026-09-11T03:39:51Z",
+    "settled_at": "2026-09-11T03:40:55Z"
+   },
+   {
+    "authority": "uHuQ81ZFh2wrzqk1hTggUYEQHCmT3nVcHtAdHkSdPjH",
+    "deployment": "ErqfojGTpTYRRns1nc83eCrYZeMzQ7WRqiiHdwhNzJsn",
+    "deployed_usd_amount": "50000000",
+    "total_usd_stake_amount": "47000000",
+    "winning_usd_stake_amount": "2238095",
+    "selected_tiles": 2097151,
+    "is_automation": true,
+    "is_grubstake_funded": false,
+    "is_won": true,
+    "usd_earned": "42380940",
+    "sats_shares_earned": "3259651",
+    "btc_earned": "6455",
+    "btc_earned_usd": 4.9612825254093575,
+    "token_earned": "13516595",
+    "token_earned_usd": 0.6837189283252787,
+    "token_shares_earned": "11066513160",
+    "hashrate_earned": "5050",
+    "deployed_at": "2026-09-11T03:39:48Z",
+    "settled_at": "2026-09-11T03:40:53Z"
+   },
+   {
+    "authority": "2pLmtZ9GpajW2mAjtNxhcd9z59Li72JCpCJiSmdLBvQt",
+    "deployment": "5E9nrP8agfiefN7FAyTD5KMTPUQRmvKhQre4eNduJ6xJ",
+    "deployed_usd_amount": "2000000",
+    "total_usd_stake_amount": "1880000",
+    "winning_usd_stake_amount": "0",
+    "selected_tiles": 517111,
+    "is_automation": true,
+    "is_grubstake_funded": false,
+    "is_won": false,
+    "usd_earned": "1779990",
+    "sats_shares_earned": "0",
+    "btc_earned": "0",
+    "btc_earned_usd": 0.0,
+    "token_earned": "101504",
+    "token_earned_usd": 0.005134444444087367,
+    "token_shares_earned": "83104905",
+    "hashrate_earned": "48",
+    "deployed_at": "2026-09-11T03:39:52Z",
+    "settled_at": "2026-09-11T03:40:55Z"
+   }
+  ],
+  "tile_stakes": [
+   {
+    "stake": "20289029",
+    "deploy_count": 71
+   },
+   {
+    "stake": "24458288",
+    "deploy_count": 75
+   },
+   {
+    "stake": "23925069",
+    "deploy_count": 75
+   },
+   {
+    "stake": "23128824",
+    "deploy_count": 72
+   },
+   {
+    "stake": "23594483",
+    "deploy_count": 73
+   },
+   {
+    "stake": "24456149",
+    "deploy_count": 75
+   },
+   {
+    "stake": "23481280",
+    "deploy_count": 72
+   },
+   {
+    "stake": "19777173",
+    "deploy_count": 71
+   },
+   {
+    "stake": "24295372",
+    "deploy_count": 75
+   },
+   {
+    "stake": "24103649",
+    "deploy_count": 73
+   },
+   {
+    "stake": "20113983",
+    "deploy_count": 71
+   },
+   {
+    "stake": "25718902",
+    "deploy_count": 75
+   },
+   {
+    "stake": "23341910",
+    "deploy_count": 74
+   },
+   {
+    "stake": "23044817",
+    "deploy_count": 72
+   },
+   {
+    "stake": "24386223",
+    "deploy_count": 74
+   },
+   {
+    "stake": "19869013",
+    "deploy_count": 72
+   },
+   {
+    "stake": "20473765",
+    "deploy_count": 73
+   },
+   {
+    "stake": "23663601",
+    "deploy_count": 72
+   },
+   {
+    "stake": "24033353",
+    "deploy_count": 72
+   },
+   {
+    "stake": "23580124",
+    "deploy_count": 69
+   },
+   {
+    "stake": "20019728",
+    "deploy_count": 68
+   }
+  ],
+  "deployed_usd_on_winning_tile_amount": "20019728"
+ }
+}

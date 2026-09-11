@@ -1,0 +1,18 @@
+[Unit]
+Description=Stonkfly watch page
+After=stonkfly-worker.service
+
+[Service]
+Type=simple
+User=stonkfly
+WorkingDirectory=/opt/stonkfly
+EnvironmentFile=/opt/stonkfly/.env
+Environment=STONKFLY_DATA=/opt/stonkfly/data STONKFLY_RUNS=/opt/stonkfly/runs
+ExecStart=/opt/stonkfly/deploy/entrypoint.sh watch
+Restart=on-failure
+RestartSec=10s
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

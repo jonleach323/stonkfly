@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STONKFLY · a fly connectome plays SatRush</title>
+<meta name="description" content="Watch a fly-connectome simulation pick tiles in SatRush, a 21-tile on-chain game on Solana. No edge, expected loss, decorative avatar.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#060709">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="STONKFLY">
+<meta property="og:title" content="STONKFLY · a fly connectome plays SatRush">
+<meta property="og:description" content="166,700 simulated neurons look at a 21-tile board and pick tiles. One deploy per round, fixed stake, negative expected value. Watch the picks, the round and the stack.">
+<meta property="og:image" content="/share.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Pixel-art fly beside the STONKFLY wordmark and a 21-tile board strip, with the words: a fly connectome plays SatRush. No edge, expected loss.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="STONKFLY · a fly connectome plays SatRush">
+<meta name="twitter:description" content="166,700 simulated neurons look at a 21-tile board and pick tiles. No edge, expected loss, decorative avatar.">
+<meta name="twitter:image" content="/share.png">
+<meta name="twitter:image:alt" content="Pixel-art fly beside the STONKFLY wordmark and a 21-tile board strip, with the words: a fly connectome plays SatRush. No edge, expected loss.">
+
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="/style.css">
+<script type="module" src="/app.js"></script>
+<noscript><style>#how-it-works[hidden]{display:block!important}#stage-fallback[hidden]{display:grid!important}#output,#stage-caption{display:none!important}</style></noscript>
+</head>
+<body>
+<a class="skip" href="#main">SKIP TO CONTENT</a>
+<div class="wrap">
+
+<header class="top">
+  <h1 class="wordmark"><a href="#watch"><img src="/logo.svg" width="276" height="56" alt="STONKFLY"></a></h1>
+  <nav class="nav" aria-label="Views">
+    <a href="#watch" data-view-link="watch" aria-current="page">WATCH</a>
+    <a href="#how-it-works" data-view-link="how">HOW IT WORKS</a>
+  </nav>
+</header>
+<noscript><p class="fine nojs">JavaScript is off: the live numbers on this page will not load. The mechanism and the caveats are under HOW IT WORKS below.</p></noscript>
+
+<main id="main">
+
+<!-- ============================ WATCH ============================ -->
+<section id="watch" class="view" aria-label="Watch">
+<div class="cols">
+
+  <section class="theater" aria-labelledby="theater-title">
+    <div class="stage-bar">
+      <span class="live-dot" aria-hidden="true"></span>
+      <h2 id="theater-title" class="stage-title">FLY.EXE</h2>
+      <span class="stage-note" id="stage-note">DECORATIVE AVATAR</span>
+      <button type="button" class="btn" id="pause-btn">PAUSE MOTION</button>
+    </div>
+    <div class="stage">
+      <canvas id="output" role="img" tabindex="0" aria-label="Decorative 3D fly at a terminal. Drag, or use the left and right arrow keys, to orbit. Not a neural or muscle reconstruction."></canvas>
+      <div class="stage-fallback" id="stage-fallback" hidden>
+        <pre class="ascii-fly" aria-hidden="true">   \ /
+ -=(o)=-
+   / \</pre>
+        <p><b id="stage-fallback-title">3D VIEW OFF</b><br><span>The avatar is decorative. The numbers below are the experiment.</span></p>
+      </div>
+      <p class="stage-caption" id="stage-caption">DRAG OR ARROW KEYS TO ORBIT</p>
+    </div>
+
+    <dl class="brain-bar" aria-label="Latest neural observation">
+      <div><dt>NEURONS</dt><dd id="b-neurons">166,700</dd></div>
+      <div><dt>LATEST SPIKES</dt><dd id="b-spikes">—</dd></div>
+      <div><dt>MEMORY CHANGED</dt><dd id="b-edges">—</dd></div>
+      <div><dt>BRAIN TIME</dt><dd id="b-time">—</dd></div>
+    </dl>
+
+    <section class="panel pick" aria-labelledby="pick-title">
+      <header class="panel-head">
+        <h2 id="pick-title">NEURAL PICK</h2>
+        <span class="chip" id="pick-meta">OBSERVATION —</span>
+      </header>
+      <ol class="minigrid" id="minigrid" aria-label="The 21 tiles; lit tiles are the fly's latest proposal"></ol>
+      <p class="pick-line"><span class="chip" id="pick-status">WAITING</span> <span id="pick-tiles">WAITING FOR WORKER</span></p>
+      <p class="stimulus" id="stimulus" aria-live="polite">—</p>
+      <p class="fine">Fixed readout: 21 pre-registered groups of descending neurons, one per tile. A group firing above its own running average, beyond the median, proposes its tile. Not a strategy; no readout of a random draw is profitable on average.</p>
+    </section>
+  </section>
+
+  <section class="account" aria-labelledby="stack-title">
+    <div class="stack-head">
+      <h2 id="stack-title">THE STACK</h2>
+      <span class="chip" id="fresh-chip">WAITING FOR WORKER</span>
+    </div>
+
+    <div class="panel value">
+      <div class="value-main">
+        <span class="label">TOTAL VALUE · <span id="value-unit">USDC</span></span>
+        <span class="big num" id="equity"><span class="dollars">$—</span><span class="cents"></span></span>
+      </div>
+      <dl class="value-side">
+        <div><dt>NET P&amp;L</dt><dd class="num" id="pnl">—</dd></div>
+        <div><dt>IN PLAY</dt><dd class="num" id="in-play">—</dd></div>
+      </dl>
+    </div>
+
+    <section class="panel board" aria-labelledby="board-title">
+      <header class="panel-head">
+        <h2 id="board-title">LIVE BOARD</h2>
+        <span class="chip" id="board-chip">BOARD OFFLINE</span>
+      </header>
+      <div class="board-meta">
+        <div><span class="label">ROUND</span><span class="num" id="round-id">#—</span></div>
+        <div><span class="label">POT</span><span class="num" id="pot">—</span></div>
+        <div><span class="label">MINERS</span><span class="num" id="miners">—</span></div>
+        <div><span class="label">ENDS IN</span><span class="num" id="countdown">—</span></div>
+      </div>
+      <div class="countdown" id="countdown-bar" role="progressbar" aria-label="Round time remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="countdown-fill"></span></div>
+      <ol class="tiles" id="tiles" aria-label="21 tiles shaded by stake; the fly's picks are outlined, the last winning tile is red"></ol>
+      <div class="legend">
+        <span><i class="sw sw-pick" aria-hidden="true"></i> FLY PICKS <span id="pick-round"></span></span>
+        <span><i class="sw sw-win" aria-hidden="true"></i> LAST WINNER</span>
+        <span><i class="sw sw-stake" aria-hidden="true"></i> STAKE</span>
+      </div>
+      <div class="last">
+        <span class="label">LAST</span>
+        <ol id="last-winners" aria-label="Recent winning tiles, newest first"></ol>
+      </div>
+    </section>
+
+    <dl class="panel holdings" aria-label="Holdings">
+      <div><dt>USDC AVAILABLE</dt><dd class="num" id="h-cash">—</dd></div>
+      <div><dt>IN PLAY</dt><dd class="num" id="h-inplay">—</dd></div>
+      <div><dt>SATS WON</dt><dd class="num" id="h-sats">—</dd></div>
+      <div><dt>TILE HITS / ROUNDS</dt><dd class="num" id="h-rounds">—</dd></div>
+      <div><dt>HIT RATE</dt><dd class="num" id="h-hit">—</dd></div>
+    </dl>
+    <p class="fine holdings-note">A hit means the winning tile was among the picks; picking k of 21 tiles hits k/21 of rounds by chance. A hit is not a profit: the 6% fee and the 11% haircut on missed tiles come off first.</p>
+  </section>
+
+  <section class="panel activity" aria-labelledby="activity-title">
+    <header class="panel-head">
+      <h2 id="activity-title">ACTIVITY</h2>
+      <div class="tabs" role="tablist" aria-label="Activity">
+        <button type="button" role="tab" id="tab-rounds" data-tab="rounds" aria-selected="true" aria-controls="panel-rounds">ROUNDS</button>
+        <button type="button" role="tab" id="tab-decisions" data-tab="decisions" aria-selected="false" aria-controls="panel-decisions" tabindex="-1">DECISIONS</button>
+      </div>
+    </header>
+    <div role="tabpanel" id="panel-rounds" aria-labelledby="tab-rounds" tabindex="0">
+      <div class="scroll">
+        <table class="data">
+          <thead><tr><th scope="col">ROUND · UTC</th><th scope="col">RESULT</th><th scope="col">P&amp;L</th><th scope="col">STAKE</th><th scope="col">REFUND</th><th scope="col">SATS</th><th scope="col">TILES</th><th scope="col">TX</th></tr></thead>
+          <tbody id="rounds-body"><tr><td colspan="8" class="dim">WAITING FOR WORKER</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div role="tabpanel" id="panel-decisions" aria-labelledby="tab-decisions" tabindex="0" hidden>
+      <div class="scroll">
+        <table class="data">
+          <thead><tr><th scope="col">OBS · UTC</th><th scope="col">ROUND</th><th scope="col">STATUS</th><th scope="col">STIMULUS</th><th scope="col">KC SPIKES</th><th scope="col">TILES</th></tr></thead>
+          <tbody id="decisions-body"><tr><td colspan="6" class="dim">WAITING FOR WORKER</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <details class="panel perf" id="perf">
+    <summary><h2>PERFORMANCE &amp; LIMITS</h2><span class="chip" id="perf-chip">—</span></summary>
+    <div class="perf-body">
+      <figure class="chart">
+        <svg id="equity-chart" viewBox="0 0 640 220" role="img" aria-label="Equity over time" aria-describedby="chart-caption"></svg>
+        <figcaption id="chart-caption">EQUITY · USDC · DASHED = STARTING BALANCE · TIMES UTC</figcaption>
+      </figure>
+      <div class="perf-side">
+        <dl class="stats" aria-label="Totals">
+          <div><dt>USDC</dt><dd class="num" id="s-cash">—</dd></div>
+          <div><dt>FEES PAID</dt><dd class="num" id="s-fees">—</dd></div>
+          <div><dt>REFUNDS</dt><dd class="num" id="s-refunds">—</dd></div>
+          <div><dt>SATS WON</dt><dd class="num" id="s-sats">—</dd></div>
+          <div><dt>BEST ROUND</dt><dd class="num" id="s-best">—</dd></div>
+        </dl>
+        <p class="limits" id="limits">$1 / ROUND · 300 DEPLOYS / DAY · 1 DEPLOY PER ROUND · LOSS STOP $20</p>
+        <p class="fine">Fees make every deploy negative in expectation. The loss stop halts new deploys; it does not cancel a round in progress or cap the game's fees.</p>
+      </div>
+    </div>
+  </details>
+
+</div>
+</section>
+
+<!-- ========================= HOW IT WORKS ========================= -->
+<section id="how-it-works" class="view" aria-label="How it works" hidden>
+  <header class="how-head">
+    <h2>HOW IT WORKS</h2>
+    <p class="lede">Every round the public SatRush board is drawn as a 320×180 picture, shown to a spiking network wired from a fly connectome, and a fixed readout turns descending-neuron spikes into a tile choice. That is the whole mechanism. There is no strategy layer, and none could beat a random draw.</p>
+  </header>
+
+  <ol class="steps">
+    <li>
+      <article class="panel step" aria-labelledby="step1-title">
+        <header class="step-head"><span class="step-no" aria-hidden="true">01</span><h2 id="step1-title">INPUT</h2></header>
+        <figure class="monitor">
+          <div class="screen"><img id="sensory" src="/api/sensory.png" width="320" height="180" alt="The exact 320 by 180 pixel board image the retina last received: 21 shaded tiles, recent winners outlined, the pot, the miner count and a countdown bar"><p class="screen-empty" id="sensory-empty" hidden>NO FRAME YET</p></div>
+          <div class="monitor-stand" aria-hidden="true"></div>
+          <figcaption>THE FRAME THE RETINA LAST RECEIVED · <span id="sensory-meta">—</span></figcaption>
+        </figure>
+        <h3>The fly gets the pixels.</h3>
+        <p>The board (21 tiles shaded by stake, the last five winners outlined, pot, miner count and countdown) is rendered locally as RGB. Its pixels drive <strong>3,335 brightness inputs</strong> (R1–R6 cells) and <strong>811 R8 color inputs</strong>. The frame never shows this wallet's balance, its own picks or its results. The simulator sees pixels, not tile numbers or odds.</p>
+      </article>
+    </li>
+    <li>
+      <article class="panel step" aria-labelledby="step2-title">
+        <header class="step-head"><span class="step-no" aria-hidden="true">02</span><h2 id="step2-title">NETWORK</h2></header>
+        <figure class="fig">
+          <svg viewBox="0 0 240 120" role="img" aria-label="Pixel diagram: input cells on the left connect through many cells to output cells on the right" shape-rendering="crispEdges">
+            <g stroke="#32353e" stroke-width="2" fill="none">
+              <path d="M14 60H36V22H62M36 60V98H62M62 22V46H92M62 98V74H92M92 46V16H122M92 46V74M92 74V104H122M122 16V38H150M122 104V82H150M150 38V60H182M150 82V60M182 60V22H212M182 60V98H212"/>
+              <path d="M62 46V74M122 38V82M36 22H80V46M80 74H150"/>
+            </g>
+            <g fill="#7376ff">
+              <rect x="10" y="56" width="8" height="8"/><rect x="32" y="18" width="8" height="8"/><rect x="32" y="94" width="8" height="8"/>
+            </g>
+            <g fill="#989aaa">
+              <rect x="58" y="18" width="8" height="8"/><rect x="58" y="42" width="8" height="8"/><rect x="58" y="70" width="8" height="8"/><rect x="58" y="94" width="8" height="8"/>
+              <rect x="88" y="12" width="8" height="8"/><rect x="88" y="42" width="8" height="8"/><rect x="88" y="70" width="8" height="8"/><rect x="88" y="100" width="8" height="8"/>
+              <rect x="118" y="12" width="8" height="8"/><rect x="118" y="34" width="8" height="8"/><rect x="118" y="78" width="8" height="8"/><rect x="118" y="100" width="8" height="8"/>
+              <rect x="146" y="34" width="8" height="8"/><rect x="146" y="78" width="8" height="8"/>
+            </g>
+            <g fill="#f3f4ed">
+              <rect x="76" y="42" width="8" height="8"/><rect x="178" y="56" width="8" height="8"/>
+            </g>
+            <g fill="#bdff32">
+              <rect x="208" y="18" width="8" height="8"/><rect x="208" y="94" width="8" height="8"/>
+              <rect x="44" y="60" width="4" height="4"/><rect x="102" y="46" width="4" height="4"/><rect x="164" y="60" width="4" height="4"/>
+            </g>
+            <text x="8" y="116" class="figtext" fill="#7376ff">RETINA</text>
+            <text x="232" y="116" class="figtext" fill="#bdff32" text-anchor="end">DN GROUPS</text>
+          </svg>
+        </figure>
+        <h3>Spikes run through the whole retained graph.</h3>
+        <p><strong>MaleCNS v1.0</strong>: <strong>166,700 cells</strong> and <strong>25.6M connections</strong>, integrated as leaky integrate-and-fire neurons at 0.1 ms with a coarse transmitter-sign proxy. Each observation advances 500 ms of neural time inside a round of about 63 s. The wiring comes from a real reconstruction of a male fly's brain and nerve cord; the physiology is a coarse approximation, and nothing is pruned.</p>
+      </article>
+    </li>
+    <li>
+      <article class="panel step" aria-labelledby="step3-title">
+        <header class="step-head"><span class="step-no" aria-hidden="true">03</span><h2 id="step3-title">ACTION</h2></header>
+        <figure class="fig">
+          <svg viewBox="0 0 240 120" role="img" aria-label="Pixel diagram: a 7 by 3 tile grid with some tiles lit, an arrow to a guard box, an arrow to a chain of blocks labelled one deploy" shape-rendering="crispEdges">
+            <g id="fig-tiles">
+              <rect x="6" y="42" width="10" height="10" fill="#32353e"/><rect x="18" y="42" width="10" height="10" fill="#32353e"/><rect x="30" y="42" width="10" height="10" fill="#bdff32"/><rect x="42" y="42" width="10" height="10" fill="#32353e"/><rect x="54" y="42" width="10" height="10" fill="#bdff32"/><rect x="66" y="42" width="10" height="10" fill="#bdff32"/><rect x="78" y="42" width="10" height="10" fill="#32353e"/>
+              <rect x="6" y="54" width="10" height="10" fill="#bdff32"/><rect x="18" y="54" width="10" height="10" fill="#32353e"/><rect x="30" y="54" width="10" height="10" fill="#32353e"/><rect x="42" y="54" width="10" height="10" fill="#32353e"/><rect x="54" y="54" width="10" height="10" fill="#bdff32"/><rect x="66" y="54" width="10" height="10" fill="#32353e"/><rect x="78" y="54" width="10" height="10" fill="#bdff32"/>
+              <rect x="6" y="66" width="10" height="10" fill="#bdff32"/><rect x="18" y="66" width="10" height="10" fill="#32353e"/><rect x="30" y="66" width="10" height="10" fill="#32353e"/><rect x="42" y="66" width="10" height="10" fill="#bdff32"/><rect x="54" y="66" width="10" height="10" fill="#32353e"/><rect x="66" y="66" width="10" height="10" fill="#bdff32"/><rect x="78" y="66" width="10" height="10" fill="#bdff32"/>
+            </g>
+            <polygon points="96,58 108,58 108,54 116,60 108,66 108,62 96,62" fill="#989aaa"/>
+            <rect x="124" y="38" width="44" height="44" fill="#060709" stroke="#32353e" stroke-width="2"/>
+            <text x="146" y="63" class="figtext" fill="#f3f4ed" text-anchor="middle">GUARD</text>
+            <polygon points="176,58 188,58 188,54 196,60 188,66 188,62 176,62" fill="#989aaa"/>
+            <g fill="#060709" stroke="#7376ff" stroke-width="2">
+              <rect x="204" y="34" width="28" height="12"/><rect x="204" y="54" width="28" height="12"/><rect x="204" y="74" width="28" height="12"/>
+            </g>
+            <g fill="#7376ff"><rect x="216" y="46" width="4" height="8"/><rect x="216" y="66" width="4" height="8"/></g>
+            <text x="46" y="30" class="figtext" fill="#bdff32" text-anchor="middle">21 DN GROUPS</text>
+            <text x="146" y="30" class="figtext" fill="#989aaa" text-anchor="middle">VETO ONLY</text>
+            <text x="238" y="30" class="figtext" fill="#7376ff" text-anchor="end">SOLANA</text>
+            <text x="46" y="98" class="figtext" fill="#989aaa" text-anchor="middle">TILES</text>
+            <text x="146" y="98" class="figtext" fill="#989aaa" text-anchor="middle">LIMITS</text>
+            <text x="238" y="98" class="figtext" fill="#989aaa" text-anchor="end">1 DEPLOY</text>
+          </svg>
+        </figure>
+        <h3>A fixed readout, not a plan.</h3>
+        <p>Every descending neuron is sorted by ID and cut into <strong>21 pre-registered groups</strong>, one per tile<span id="readout-cells"></span>. A group firing above its own running average, beyond the median, proposes its tile; the largest excess is always in. A guard checks timing, budget, count and account state. It can veto; it never substitutes tiles. What passes becomes at most <strong>one <code>DeployPublic</code> per round</strong>: in live mode it is sent to Solana from a dedicated wallet; in paper mode nothing is sent and the deploy is settled on paper against the real winning tile and pot. The stake is a fixed setting, never a neural quantity.</p>
+      </article>
+    </li>
+    <li>
+      <article class="panel step" aria-labelledby="step4-title">
+        <header class="step-head"><span class="step-no" aria-hidden="true">04</span><h2 id="step4-title">FEEDBACK</h2></header>
+        <figure class="fig">
+          <svg viewBox="0 0 260 120" role="img" aria-label="Pixel diagram: a 200 millisecond square pulse, then a row of 15 reward cells and a row of 2 aversive cells" shape-rendering="crispEdges">
+            <polyline points="8,64 70,64 70,28 118,28 118,64 252,64" fill="none" stroke="#bdff32" stroke-width="2"/>
+            <g fill="#32353e"><rect x="70" y="72" width="2" height="6"/><rect x="118" y="72" width="2" height="6"/><rect x="70" y="76" width="50" height="2"/></g>
+            <text x="94" y="20" class="figtext" fill="#f3f4ed" text-anchor="middle">200 MS PULSE</text>
+            <text x="190" y="56" class="figtext" fill="#989aaa" text-anchor="middle">±0.01 USDC</text>
+            <g fill="#bdff32">
+              <rect x="8" y="88" width="6" height="6"/><rect x="17" y="88" width="6" height="6"/><rect x="26" y="88" width="6" height="6"/><rect x="35" y="88" width="6" height="6"/><rect x="44" y="88" width="6" height="6"/><rect x="53" y="88" width="6" height="6"/><rect x="62" y="88" width="6" height="6"/><rect x="71" y="88" width="6" height="6"/><rect x="80" y="88" width="6" height="6"/><rect x="89" y="88" width="6" height="6"/><rect x="98" y="88" width="6" height="6"/><rect x="107" y="88" width="6" height="6"/><rect x="116" y="88" width="6" height="6"/><rect x="125" y="88" width="6" height="6"/><rect x="134" y="88" width="6" height="6"/>
+            </g>
+            <g fill="#ff4b78"><rect x="237" y="88" width="6" height="6"/><rect x="246" y="88" width="6" height="6"/></g>
+            <text x="8" y="112" class="figtext" fill="#bdff32">15 PAM11 REWARD</text>
+            <text x="252" y="112" class="figtext" fill="#ff4b78" text-anchor="end">2 PPL101 AVERSIVE</text>
+          </svg>
+        </figure>
+        <h3>One pulse per settled round.</h3>
+        <p>When a round the fly played settles, its result is refund plus sats value (plus, in live play, any RUSH token value the API reports) minus the amount deployed. At least <strong>+0.01 USDC</strong> schedules a <strong>200 ms pulse into 15 PAM11</strong> dopamine cells; at most <strong>−0.01 USDC</strong>, the same pulse into <strong>2 PPL101</strong> cells. A candidate memory rule then adjusts existing KC→MBON connections. Fees count as loss, so most rounds are aversive. This is engineered reinforcement, not modeled pain or pleasure.</p>
+      </article>
+    </li>
+  </ol>
+
+  <aside class="panel note" aria-labelledby="note-title">
+    <h2 id="note-title">CHANGING CONNECTIONS ARE NOT PROVEN SKILL.</h2>
+    <ul>
+      <li>The winning tile is drawn on chain. No reading of the board predicts it, and synaptic change is not evidence of learning to play well.</li>
+      <li>Every deploy pays a 6% fee and each missed tile loses 11% of what was placed on it. Expected value is negative every round; the balance is expected to decline.</li>
+      <li>Paper mode settles hypothetical deploys from the real winning tile and pot. Results tagged PAPER or SIM are simulated. Only LIVE WALLET in the footer means real deploys.</li>
+      <li>The 3D fly is decorative. It is not a neural or muscle reconstruction.</li>
+      <li>One worker owns the ledger. This page reads published snapshots and can change nothing.</li>
+    </ul>
+    <p class="note-links"><a href="/api/audit">AUDIT JSON</a> · <a href="/api/state">STATE JSON</a> · <a href="https://github.com/jonleach323/stonkfly">SOURCE</a></p>
+  </aside>
+</section>
+
+</main>
+
+<footer class="foot">
+  <span class="chip" id="conn-chip" aria-live="polite">CONNECTING</span>
+  <span id="foot-fresh">—</span>
+  <span id="foot-exec">—</span>
+  <nav aria-label="Links"><a id="wallet-link" target="_blank" rel="noopener noreferrer" hidden>WALLET</a><a href="/api/audit">AUDIT</a><a href="https://github.com/jonleach323/stonkfly">SOURCE</a></nav>
+  <span class="foot-note">NOT AFFILIATED WITH SATRUSH · READ ONLY</span>
+</footer>
+
+</div>
+</body>
+</html>

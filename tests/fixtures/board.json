@@ -1,0 +1,333 @@
+{
+ "data": {
+  "address": "FbVd1fsYKpEj1Bzupbjo2VGJyfgLU9aw4r8U5uuR8v6s",
+  "round_id": 55576,
+  "round_duration": 200,
+  "start_slot": "446057011",
+  "end_slot": "446057211",
+  "current_slot": "446057172",
+  "slot_duration_ms": 315.2285864424593,
+  "round_started_at": "2026-09-11T03:40:54.283573295Z",
+  "round_ends_at": "2026-09-11T03:41:57.329573295Z",
+  "strike": {
+   "pending_usd_amount": "0",
+   "usd_amount": "8083058520",
+   "btc_amount": "4136341",
+   "pool_usd_amount": "5658140964",
+   "pool_btc_amount": "2895438",
+   "pool_combined_usd_amount": 8243.430962432805,
+   "token_amount": "10148608468",
+   "reserve_token_amount": "0",
+   "pool_token_amount": "7104025927",
+   "last_trigger_round_id": 54599,
+   "last_trigger_at": "2026-09-10T09:05:36Z"
+  },
+  "hashrate_boost_rounds_remaining": 0,
+  "epoch_vault": {
+   "address": "Ei1gqB9fyR7F7JBPz49YjkAD5karR4iqxPoyYczJGk8Q",
+   "iteration_id": 14,
+   "last_trigger_slot": "445674200",
+   "iteration_started_at": "2026-09-09T18:09:41.313573295Z",
+   "iteration_ends_at": "2026-09-12T21:48:58.811573295Z",
+   "pending_usd_amount": "0",
+   "pool_usd_amount": "6657316307",
+   "pool_btc_amount": "8566558",
+   "active_pending_usd_amount": "0",
+   "active_pool_usd_amount": "5991584676",
+   "active_pool_btc_amount": "7709902",
+   "active_pool_combined_usd_amount": 12117.032382102741,
+   "reserved_usd_amount": "579972954",
+   "reserved_btc_amount": "726117",
+   "pool_token_amount": "4349403122",
+   "active_pool_token_amount": "3914462809",
+   "reserved_token_amount": "0",
+   "current_iteration": {
+    "address": "Fh7c1H9R5C9XvAdmtcwoSjqJz5aUpECaFEcgHMn66FsX",
+    "id": 14,
+    "state": "open",
+    "total_tickets": "149450",
+    "participants_count": 84,
+    "page_count": 3,
+    "claimable_usd": null,
+    "claimable_btc": null,
+    "claimable_token": null,
+    "winners_selected": null,
+    "winners_distributed": null,
+    "winners_claimed": null,
+    "winners": null
+   }
+  },
+  "one_btc_vault": {
+   "address": "9xMBPy3aRD92QvkhYZfVwJ6ZvfLTzM84pX6ZbjBnHfGP",
+   "iteration_id": 2,
+   "last_trigger_slot": "439435062",
+   "pending_usd_amount": "0",
+   "btc_amount": "91095706",
+   "reserved_btc_amount": "0",
+   "current_iteration": {
+    "address": "5U6UF44CCQZsVLcBuSYNm1XArqyx3pwX8obBdSEmcrja",
+    "id": 2,
+    "state": "open",
+    "total_tickets": "846604",
+    "winning_ticket": null,
+    "prize_btc": "0",
+    "total_participants": 233
+   }
+  },
+  "sats_vault": {
+   "address": "5ATZbUaByMDTePxRdjAaisopAULwsjMFTrM4f5vXVJQu",
+   "btc_amount": "485587865",
+   "btc_shares": "245212570443",
+   "apr": 315.0982968725605
+  },
+  "token_vault": {
+   "address": "BfwR6rayqvrGwL2oD2PWkPJCJ3RYTcjKnn4YafhVTrs1",
+   "token_amount": "5759621964304",
+   "token_shares": "4715605688189766",
+   "leftovers": "0",
+   "apr": 20847.69080012574
+  },
+  "active_round": {
+   "address": "9CeERBkWsNSxD9dReZTVsaE3pTDGfs5JxELcYG7TZyeb",
+   "id": 55576,
+   "state": "active",
+   "winning_tile": null,
+   "deployed_pending_usd_amount": "476935692",
+   "deployed_usd_amount": "0",
+   "deployed_btc_amount": "0",
+   "deployed_combined_usd_amount": 476.935692,
+   "deployed_usd_on_winning_tile_amount": "0",
+   "total_gross_deployed_usd": "507378457",
+   "miners_count": 76,
+   "revealed_miners_count": 76,
+   "winners_count": 0,
+   "settled_miners_count": 0,
+   "strike_bonus_usd": "0",
+   "strike_bonus_btc": "0",
+   "minted_token_amount": "0",
+   "strike_bonus_token": "0",
+   "is_hashrate_boosted": false,
+   "tile_stakes": [
+    {
+     "stake": "20154744",
+     "deploy_count": 70
+    },
+    {
+     "stake": "24324003",
+     "deploy_count": 74
+    },
+    {
+     "stake": "23790784",
+     "deploy_count": 74
+    },
+    {
+     "stake": "22994539",
+     "deploy_count": 71
+    },
+    {
+     "stake": "23460198",
+     "deploy_count": 72
+    },
+    {
+     "stake": "24321864",
+     "deploy_count": 74
+    },
+    {
+     "stake": "23346995",
+     "deploy_count": 71
+    },
+    {
+     "stake": "19642888",
+     "deploy_count": 70
+    },
+    {
+     "stake": "24161087",
+     "deploy_count": 74
+    },
+    {
+     "stake": "23969364",
+     "deploy_count": 72
+    },
+    {
+     "stake": "19979698",
+     "deploy_count": 70
+    },
+    {
+     "stake": "25584617",
+     "deploy_count": 74
+    },
+    {
+     "stake": "23207625",
+     "deploy_count": 73
+    },
+    {
+     "stake": "22910532",
+     "deploy_count": 71
+    },
+    {
+     "stake": "24251938",
+     "deploy_count": 73
+    },
+    {
+     "stake": "19734728",
+     "deploy_count": 71
+    },
+    {
+     "stake": "20339480",
+     "deploy_count": 72
+    },
+    {
+     "stake": "23529316",
+     "deploy_count": 71
+    },
+    {
+     "stake": "23899068",
+     "deploy_count": 71
+    },
+    {
+     "stake": "23445839",
+     "deploy_count": 68
+    },
+    {
+     "stake": "19885443",
+     "deploy_count": 67
+    }
+   ]
+  },
+  "previous_round": {
+   "address": "8Pa5vVYGbPTeKQ38wUAkc6w3iBi3DnY6b4X35UFCQdXH",
+   "id": 55575,
+   "state": "finished",
+   "winning_tile": 20,
+   "deployed_pending_usd_amount": "0",
+   "deployed_usd_amount": "435281965",
+   "deployed_btc_amount": "57742",
+   "deployed_combined_usd_amount": 479.6750153009967,
+   "deployed_usd_on_winning_tile_amount": "20019728",
+   "total_gross_deployed_usd": "510378457",
+   "miners_count": 77,
+   "revealed_miners_count": 77,
+   "winners_count": 68,
+   "settled_miners_count": 77,
+   "strike_bonus_usd": "0",
+   "strike_bonus_btc": "0",
+   "minted_token_amount": "155137082",
+   "strike_bonus_token": "0",
+   "is_hashrate_boosted": false,
+   "tile_stakes": [
+    {
+     "stake": "20289029",
+     "deploy_count": 71
+    },
+    {
+     "stake": "24458288",
+     "deploy_count": 75
+    },
+    {
+     "stake": "23925069",
+     "deploy_count": 75
+    },
+    {
+     "stake": "23128824",
+     "deploy_count": 72
+    },
+    {
+     "stake": "23594483",
+     "deploy_count": 73
+    },
+    {
+     "stake": "24456149",
+     "deploy_count": 75
+    },
+    {
+     "stake": "23481280",
+     "deploy_count": 72
+    },
+    {
+     "stake": "19777173",
+     "deploy_count": 71
+    },
+    {
+     "stake": "24295372",
+     "deploy_count": 75
+    },
+    {
+     "stake": "24103649",
+     "deploy_count": 73
+    },
+    {
+     "stake": "20113983",
+     "deploy_count": 71
+    },
+    {
+     "stake": "25718902",
+     "deploy_count": 75
+    },
+    {
+     "stake": "23341910",
+     "deploy_count": 74
+    },
+    {
+     "stake": "23044817",
+     "deploy_count": 72
+    },
+    {
+     "stake": "24386223",
+     "deploy_count": 74
+    },
+    {
+     "stake": "19869013",
+     "deploy_count": 72
+    },
+    {
+     "stake": "20473765",
+     "deploy_count": 73
+    },
+    {
+     "stake": "23663601",
+     "deploy_count": 72
+    },
+    {
+     "stake": "24033353",
+     "deploy_count": 72
+    },
+    {
+     "stake": "23580124",
+     "deploy_count": 69
+    },
+    {
+     "stake": "20019728",
+     "deploy_count": 68
+    }
+   ]
+  },
+  "previous_rounds": [
+   {
+    "round_id": 55575,
+    "winning_tile": 20
+   },
+   {
+    "round_id": 55574,
+    "winning_tile": 5
+   },
+   {
+    "round_id": 55573,
+    "winning_tile": 12
+   },
+   {
+    "round_id": 55572,
+    "winning_tile": 11
+   },
+   {
+    "round_id": 55571,
+    "winning_tile": 1
+   }
+  ],
+  "prices": {
+   "btc": 76881.73305565563,
+   "sat": 1.522465895181232e-06,
+   "token": 50.56669108082646,
+   "token_share": 6.176165081921062e-11
+  }
+ }
+}

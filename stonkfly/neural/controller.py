@@ -1,49 +1,12 @@
-"""Only RGB and engineered reinforcement enter the network. No market policy."""
+"""Only RGB and engineered reinforcement enter the network. No game policy."""
 
 import hashlib
 
 import numpy as np
 
+from ..readout import TileReadout
 from .common import annotations
 from .visual import VisualMemoryBrain
-
-
-class Decoder:
-    def __init__(self, ids, annotation, threshold):
-        types = annotation.type.fillna("")
-        sides = annotation.somaSide.fillna("")
-        self.left = np.flatnonzero(types.eq("DNp20") & sides.eq("L"))
-        self.right = np.flatnonzero(types.eq("DNp20") & sides.eq("R"))
-        self.gate = np.flatnonzero(types.eq("DNpe017"))
-        if not len(self.left) or not len(self.right) or not len(self.gate):
-            raise RuntimeError("Missing annotated BCI outputs")
-        self.threshold = threshold
-        self.identities = {
-            k: [str(ids[i]) for i in getattr(self, k)]
-            for k in ["left", "right", "gate"]
-        }
-
-    def decode(self, counts, seconds):
-        # Mean rates prevent side population size from creating a built-in bias.
-        left = float(np.mean(counts[self.left]) / seconds)
-        right = float(np.mean(counts[self.right]) / seconds)
-        difference = right - left
-        gate = int(counts[self.gate].sum())
-        side = (
-            "HOLD"
-            if not gate or abs(difference) < self.threshold
-            else "BUY"
-            if difference > 0
-            else "SELL"
-        )
-        return {
-            "side": side,
-            "left_hz": left,
-            "right_hz": right,
-            "difference_hz": difference,
-            "gate_spikes": gate,
-            "cell_ids": self.identities,
-        }
 
 
 class FlyController:
@@ -51,8 +14,11 @@ class FlyController:
         self.s = settings
         self.brain = VisualMemoryBrain()
         self.brain.weights_frozen = not settings.learning
-        self.decoder = Decoder(
-            self.brain.ids, annotations(self.brain.ids), settings.decoder_threshold_hz
+        self.readout = TileReadout(
+            self.brain.ids,
+            annotations(self.brain.ids),
+            settings.min_tiles,
+            settings.max_tiles,
         )
 
     def observe(self, rgb, reinforcement):
@@ -82,7 +48,7 @@ class FlyController:
                 pulse -= n
         b.counts[:] = counts
         return {
-            **self.decoder.decode(counts, self.s.neural_ms / 1000),
+            **self.readout.decode(counts, self.s.neural_ms / 1000),
             "brain_ms": b.sim_ms,
             "compute_seconds": wall,
             "stimulus": reinforcement,
@@ -101,3 +67,49 @@ class FlyController:
 
     def restore(self, path):
         self.brain.restore(path)
+
+
+class StubController:
+    """Seeded random spike counts standing in for the connectome. PAPER ONLY.
+
+    Exists so the game loop can be exercised without the 1 GB dataset. It is
+    never neural output and the CLI refuses it outside paper/fixture runs.
+    """
+
+    def __init__(self, settings, seed=0):
+        import pandas as pd
+
+        self.s = settings
+        self.rng = np.random.default_rng(seed)
+        self.n = 210
+        ids = np.arange(1, self.n + 1)
+        annotation = pd.DataFrame({"type": ["DN%03d" % (i % 50) for i in range(self.n)]})
+        self.readout = TileReadout(ids, annotation, settings.min_tiles, settings.max_tiles)
+        self.sim_ms = 0.0
+
+    def observe(self, rgb, reinforcement):
+        if reinforcement not in ("none", "reward", "aversive"):
+            raise ValueError("Unknown reinforcement")
+        counts = self.rng.poisson(2.0, self.n).astype(np.int32)
+        self.sim_ms += self.s.neural_ms
+        return {
+            **self.readout.decode(counts, self.s.neural_ms / 1000),
+            "brain_ms": self.sim_ms,
+            "compute_seconds": 0.0,
+            "stimulus": reinforcement,
+            "stimulus_ms": self.s.pulse_ms if reinforcement != "none" else 0.0,
+            "reward_spikes": 0,
+            "aversive_spikes": 0,
+            "KC_spikes": 0,
+            "total_spikes": int(counts.sum()),
+            "spike_sha256": hashlib.sha256(counts.tobytes()).hexdigest(),
+            "input_sha256": hashlib.sha256(np.asarray(rgb).tobytes()).hexdigest(),
+            "memory": {"plastic_edges": 0, "changed_edges": 0, "model": "stub"},
+            "stub": True,
+        }
+
+    def save(self, path):
+        np.savez(path, seed_state=np.asarray([0]))
+
+    def restore(self, path):
+        pass

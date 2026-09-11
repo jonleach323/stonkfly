@@ -99,7 +99,7 @@ def prepare(dataset="malecns_v1"):
         "uncertain_sign_neurons": int(uncertain.sum()),
         "retina_model": "R1-R6 luminance-only. Column inferred from all contacts onto annotated L1/L2/L3; modal column. Experimental overlapping viewport projection, not calibrated retinal angles.",
         "visual_dynamics": "Photoreceptors and lamina are graded in vivo. This experiment uses an explicit LIF proxy, low-pass luminance drive and tonic lamina current; it is not validated fly vision.",
-        "motor_interface": "Stonkfly uses DNp20 mean right-minus-left firing with a DNpe017 spike gate for buy/sell/hold. This is an engineered trading interface.",
+        "motor_interface": "Stonkfly cuts all DN-typed descending neurons into 21 fixed groups and selects tiles by group rate against the median. This is an engineered game interface.",
         "training": "The compiled graph is the baseline. Runtime adds the documented candidate KC-to-MBON07/11 plasticity and R8-to-aMe12 sign assumption.",
     }
     out = DATA

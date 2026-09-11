@@ -1,32 +1,12 @@
+import json
 import os
+from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from stonkfly.config import Settings
-from stonkfly.neural.controller import Decoder
 from stonkfly.neural.rule import advance
-from stonkfly.reinforcement import reinforcement
-
-
-def test_fixed_neuron_decoder():
-    a = pd.DataFrame(
-        {"type": ["DNp20", "DNp20", "DNpe017"], "somaSide": ["L", "R", "L"]}
-    )
-    d = Decoder(np.array([1, 2, 3]), a, 2)
-    assert d.decode(np.array([0, 10, 0]), 0.5)["side"] == "HOLD"
-    assert d.decode(np.array([0, 10, 1]), 0.5)["side"] == "BUY"
-    assert d.decode(np.array([10, 0, 1]), 0.5)["side"] == "SELL"
-    assert d.decode(np.array([4, 4, 1]), 0.5)["side"] == "HOLD"
-
-
-@pytest.mark.parametrize(
-    "equity,expected",
-    [("100.03", "reward"), ("99.97", "aversive"), ("100.001", "none"), ("100", "none")],
-)
-def test_explicit_feedback(equity, expected):
-    assert reinforcement(equity, "100", ".01")[0] == expected
 
 
 def trace_protocol(order, frozen=False):
@@ -57,30 +37,35 @@ def test_memory_rule_temporal_specificity():
 )
 def test_full_graph_sensory_reinforcement_checkpoint(tmp_path):
     from stonkfly.data import verify
+    from stonkfly.display import board_frame
     from stonkfly.neural.controller import FlyController
+    from stonkfly.satrush.api import parse_board
 
     assert verify()["neurons"] == 166700
     c = FlyController(Settings())
     assert len(c.brain.post) == 25582938 and len(c.brain.circuit["edges"]) == 7835
     assert len(c.brain.retina) == 3335 and len(c.brain.r8) == 811
-    white = np.full((180, 320, 3), 255, np.uint8)
+    assert sum(c.readout.report["group_sizes"]) == c.readout.report["cells"]
+    # A real public board: uniform synthetic boards barely activate KCs.
+    board = parse_board(json.loads((Path(__file__).parent / "fixtures/board.json").read_text())["data"], fetched_at=0.0)
+    frame = board_frame(board, now=0.0)
     for _ in range(3):
-        c.observe(white, "none")
+        out = c.observe(frame, "none")
+    assert 1 <= len(out["tiles"]) <= 21
     c.save(tmp_path / "before.npz")
     before = c.brain.weight[c.brain.circuit["edges"]].copy()
-    reward = c.observe(white, "reward")
+    reward = c.observe(frame, "reward")
     assert reward["reward_spikes"] > 0 and reward["stimulus_ms"] == 200
     assert reward["KC_spikes"] > 0 and reward["memory"]["changed_edges"] > 0
     reward_weights = c.brain.weight[c.brain.circuit["edges"]].copy()
     c.restore(tmp_path / "before.npz")
-    control = c.observe(white, "none")
+    c.observe(frame, "none")
     assert not np.array_equal(reward_weights, c.brain.weight[c.brain.circuit["edges"]])
     c.restore(tmp_path / "before.npz")
     c.brain.weights_frozen = True
-    c.observe(white, "reward")
+    c.observe(frame, "reward")
     assert np.array_equal(before, c.brain.weight[c.brain.circuit["edges"]])
     c.restore(tmp_path / "before.npz")
-    loss = c.observe(white, "aversive")
+    loss = c.observe(frame, "aversive")
     assert loss["aversive_spikes"] > 0 and loss["stimulus_ms"] == 200
     assert np.isfinite(c.brain.weight).all()
-    print({"reward": reward, "unpaired_control": control, "loss": loss})

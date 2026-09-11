@@ -1,12 +1,12 @@
 from .config import D
 
 
-def reinforcement(equity, anchor, deadband):
-    """Incremental marked-to-bid portfolio P&L, including booked trading fees.
-    The broker rejects external deposits/withdrawals before this is evaluated.
-    This is an engineered stimulus, not a statement that a fly understands money.
+def reinforcement(pnl, deadband):
+    """Sign of the settled round P&L (USDC value of refund plus BTC won minus stake).
+    This is an engineered stimulus to identified dopamine cells, not a statement
+    that a fly understands money or the game.
     """
-    delta = D(equity) - D(anchor)
+    delta = D(pnl)
     threshold = D(deadband)
     kind = (
         "reward"
