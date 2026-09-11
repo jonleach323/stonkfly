@@ -41,6 +41,10 @@ Devnet (`--network devnet`) uses the game's devnet API, RPC and mints. Devnet US
 - The ledger records the signed transaction signature before sending. An unconfirmed submission halts the worker; on restart, `reconcile` checks the signature and the deployment account before anything else. A rejected or expired transaction frees the round. A still-unknown outcome older than five minutes with no on-chain deployment is treated as failed; anything else stays halted for review.
 - The local process lock prevents two workers using one run directory. It does not coordinate multiple machines or copied ledgers.
 
+## Watching a run
+
+`python -m stonkfly serve --out runs/paper` serves the watch page from the run directory and proxies the public board; it never writes to the run. `run --publish` uploads the same documents to Vercel Blob for the hosted page. Details in [site.md](site.md).
+
 ## State, recovery and privacy
 
 `runs/<name>/` holds a SQLite ledger, two alternating checkpoints, `events.jsonl`, `latest.json`, `latest-input.png`, and provenance with exact code, graph, readout-cell and parameter hashes. Each deploy intent binds to the preceding neural observation and checkpoint.

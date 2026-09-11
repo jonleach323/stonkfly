@@ -34,8 +34,11 @@ Defaults: $1 per round (program minimum; at most $10), 300 rounds per UTC day, o
 
 ```sh
 python -m stonkfly status
+python -m stonkfly serve          # watch page at http://127.0.0.1:8787/
 python -m pytest -q
 python -m stonkfly run --fixture --stub-brain --steps 5 --out runs/smoke   # no data, no network
 ```
+
+**Watch it:** `serve` hosts a read-only page next to any run directory: the fly at its terminal, the board it just saw, the tiles it chose, each round's result, and the neural counts behind it. The same page deploys to Vercel and reads snapshots the worker publishes. [Site notes](docs/site.md).
 
 The repo does not come funded or connected to anyone's wallet. Live execution needs your local keypair and explicit opt-in. Stonkfly is not affiliated with SatRush.
