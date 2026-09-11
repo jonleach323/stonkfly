@@ -4,14 +4,23 @@
 records; it cannot deploy, claim, or change anything. The data contract is
 [`site/STATE.md`](../site/STATE.md).
 
-## Two pieces, two places
+## Everything on one server (default)
+
+`docker compose up -d` runs the worker and the page together; the `watch`
+container serves `site/` and the endpoints from the run directory on
+`127.0.0.1:8787`. Put your subdomain in front of that port (Cloudflare Tunnel
+ingress or a reverse-proxy block, snippets in `deploy/`) and you are done. No
+Vercel, no Blob, nothing else to configure; the page is never more than one
+round behind the worker.
+
+## Optional: the page on Vercel instead
 
 | Piece | Where it runs | Why |
 | --- | --- | --- |
 | Worker (the brain, the ledger, `stonkfly serve`) | your server (Docker Compose, see [operations](operations.md)) | a long-running process with a 1.6 GB dataset and 1 GB of live state; not a serverless workload |
-| Page (`site/`) | Vercel, or the same server | static files; on Vercel a few tiny functions |
+| Page (`site/`) | the same server (default), or Vercel | static files; on Vercel a few tiny functions |
 
-## Recommended: Vercel page, your server as origin
+### Vercel page, your server as origin
 
 1. Run the stack on your server and expose the watch endpoint on a hostname,
    for example `https://fly-origin.example.com` → `127.0.0.1:8787` (Cloudflare
@@ -40,7 +49,7 @@ visit. Without it (functions proxying every poll) a single always-open tab
 costs about 85,000 invocations a day, which exceeds Vercel's Hobby allowance
 within a couple of weeks.
 
-## Alternative: publish snapshots to Vercel Blob
+### Or publish snapshots to Vercel Blob
 
 For a worker that must not be reachable from the internet: run it with
 `--publish` and `BLOB_READ_WRITE_TOKEN` (optional `STONKFLY_PUBLISH_PREFIX`,
