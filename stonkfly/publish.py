@@ -38,8 +38,26 @@ BLOB_MAX_AGE = 60
 FRAME_MAX_AGE = 31536000  # content-addressed frames never change
 
 
+def _open_readonly(path):
+    """Open the ledger without ever writing to it.
+
+    The ledger is in WAL mode. A read-only connection to a WAL database needs
+    the -shm file, which SQLite creates on demand; on a read-only filesystem
+    (the watch container mounts the run directory `:ro`) that fails whenever the
+    worker's own connection is closed (stopped, halted, building the graph on
+    start). Without a -wal file there is nothing un-checkpointed, so an
+    `immutable=1` open then reads exactly the committed data.
+    """
+    try:
+        return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    except sqlite3.OperationalError:
+        if Path(f"{path}-wal").exists():
+            raise
+        return sqlite3.connect(f"file:{path}?mode=ro&immutable=1", uri=True)
+
+
 def _read_meta(path):
-    db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    db = _open_readonly(path)
     try:
         meta = {k: json.loads(v) for k, v in db.execute("SELECT key,value FROM meta")}
         rows = db.execute(
