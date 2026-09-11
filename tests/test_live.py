@@ -202,3 +202,19 @@ def test_young_unknown_outcome_is_transient(live):
     with pytest.raises(Transient):
         player.reconcile()
     assert ledger.deployment(1000)["status"] == "UNKNOWN" and not chain.sent[1:]
+
+
+def test_keygen_writes_a_private_file_once(tmp_path):
+    import json
+    import os
+
+    from stonkfly.cli import keygen_file
+    from stonkfly.satrush.wallet import load_keypair
+
+    path = tmp_path / "k.json"
+    info = keygen_file(path)
+    assert oct(os.stat(path).st_mode & 0o777) == "0o600"
+    assert str(load_keypair(path, env={}).pubkey()) == info["address"]
+    assert len(json.loads(path.read_text())) == 64
+    with pytest.raises(SystemExit):
+        keygen_file(path)
