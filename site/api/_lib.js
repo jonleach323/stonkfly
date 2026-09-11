@@ -57,6 +57,18 @@ export function clearMemo() {
 // ---------------------------------------------------------------------------
 // Environment
 
+/**
+ * The worker's own watch endpoint (its `stonkfly serve`, reachable on the internet), without a
+ * trailing slash. When set, snapshots are read live from it instead of from a Blob folder, and
+ * /api/config tells browsers to read it directly. Returns null when unset; throws on a bad value.
+ */
+export function originUrl(env = process.env) {
+  const origin = String(env.STONKFLY_ORIGIN_URL || "").trim().replace(/\/+$/, "");
+  if (!origin) return null;
+  if (!/^https?:\/\/\S+$/.test(origin)) throw new ConfigError("STONKFLY_ORIGIN_URL must be an http(s) URL");
+  return origin;
+}
+
 /** Public Blob folder the worker publishes to, without a trailing slash. */
 export function snapshotBaseUrl(env = process.env) {
   const base = String(env.SNAPSHOT_BASE_URL || "").trim().replace(/\/+$/, "");
@@ -67,12 +79,16 @@ export function snapshotBaseUrl(env = process.env) {
 
 export function snapshotUrl(name, env = process.env) {
   if (!SNAPSHOT_FILES.has(name)) throw new ConfigError(`Unknown snapshot file ${name}`);
+  const origin = originUrl(env);
+  if (origin) return `${origin}/api/${name.replace(/\.json$/, "")}`;
   return `${snapshotBaseUrl(env)}/${name}`;
 }
 
-/** The content-addressed frame `frames/<sha256>.png` the worker uploaded next to the snapshot. */
+/** The content-addressed frame `frames/<sha256>.png` the worker uploaded next to the snapshot, or the origin's live frame. */
 export function snapshotFrameUrl(sha, env = process.env) {
   if (!FRAME_SHA.test(String(sha || ""))) throw new ConfigError("Frame hash is not a SHA-256 hex digest");
+  const origin = originUrl(env);
+  if (origin) return `${origin}/api/sensory.png`;
   return `${snapshotBaseUrl(env)}/frames/${sha}.png`;
 }
 

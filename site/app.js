@@ -21,6 +21,7 @@ const DEMO = typeof window !== "undefined" && window.__STONKFLY_DEMO && typeof w
 function nowMs() { return DEMO && num(DEMO.captured_at) !== null ? Number(DEMO.captured_at) * 1000 : Date.now(); }
 
 const app = {
+  base: "", baseFallback: false, baseFails: 0, // "" = this deployment's /api; else the worker's own origin
   state: null, stateAt: 0, stateFails: 0, everFetched: false, lastError: "", stateSkew: 0,
   board: null, boardAt: 0, boardSkew: null, boardFails: 0,
   scene: null, sceneLoading: false, sceneFailed: false,
@@ -146,6 +147,24 @@ function tileList(tiles) {
 
 /* ---------------- fetching ---------------- */
 
+function apiUrl(path) {
+  return app.base ? app.base + path : path;
+}
+
+/**
+ * Where the data comes from. On Vercel, /api/config names the worker's own origin (its `stonkfly serve`
+ * behind your domain) so the browser reads it directly and the functions stay idle; without it, or if
+ * the origin stops answering, the page falls back to this deployment's /api functions.
+ */
+async function loadConfig() {
+  if (DEMO) return;
+  try {
+    const r = await getJSON("/api/config");
+    const origin = r.ok && r.body && typeof r.body.origin === "string" ? r.body.origin.trim().replace(/\/+$/, "") : "";
+    if (/^https?:\/\/\S+$/.test(origin)) app.base = origin;
+  } catch (_) { /* no config endpoint: same-origin API */ }
+}
+
 async function getJSON(url) {
   if (DEMO) {
     if (url.startsWith("/api/state")) return { ok: true, status: 200, body: DEMO.state || null };
@@ -155,11 +174,14 @@ async function getJSON(url) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
   try {
-    const r = await fetch(url, { cache: "no-store", signal: ctl.signal });
+    const r = await fetch(url.startsWith("/api/") && url !== "/api/config" ? apiUrl(url) : url, { cache: "no-store", signal: ctl.signal });
     let body = null;
     try { body = await r.json(); } catch (_) { body = null; }
+    if (app.base && r.ok) app.baseFails = 0;
     return { ok: r.ok, status: r.status, body };
   } catch (_) {
+    // A direct origin that stops answering three times in a row hands over to this deployment's functions.
+    if (app.base && ++app.baseFails >= 3) { app.base = ""; app.baseFallback = true; }
     return { ok: false, status: 0, body: null };
   } finally {
     clearTimeout(timer);
@@ -607,7 +629,7 @@ function renderSensory(s) {
   const sha = pub.frame_sha256 || null;
   if (img && sha && sha !== app.frameSha) {
     app.frameSha = sha;
-    img.src = DEMO && DEMO.sensory ? DEMO.sensory : `/api/sensory.png?v=${encodeURIComponent(sha.slice(0, 16))}`;
+    img.src = DEMO && DEMO.sensory ? DEMO.sensory : apiUrl(`/api/sensory.png?v=${encodeURIComponent(sha.slice(0, 16))}`);
     img.hidden = false;
     const empty = $("sensory-empty");
     if (empty) empty.hidden = true;
@@ -902,8 +924,10 @@ function init() {
     if (!document.hidden) { schedule("state", pollState, 0); schedule("board", pollBoard, 0); }
   });
   route();
-  pollState();
-  pollBoard();
+  loadConfig().finally(() => {
+    pollState();
+    pollBoard();
+  });
   setInterval(() => safe(tick), 1000);
   if (app.view === "watch") {
     if ("requestIdleCallback" in window) requestIdleCallback(() => loadScene(), { timeout: 1500 });

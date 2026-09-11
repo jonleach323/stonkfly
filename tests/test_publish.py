@@ -228,7 +228,9 @@ def test_local_server_routes(run_dir, tmp_path):
     thread.start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        state = json.loads(urllib.request.urlopen(base + "/api/state").read())
+        reply = urllib.request.urlopen(base + "/api/state")
+        assert reply.headers["access-control-allow-origin"] == "*"
+        state = json.loads(reply.read())
         assert state["ready"] and state["tick"] == 3
         board = json.loads(urllib.request.urlopen(base + "/api/board").read())
         assert board["live"] and len(board["tile_stakes"]) == 21

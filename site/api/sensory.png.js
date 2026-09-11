@@ -11,7 +11,7 @@
 import { createHash } from "node:crypto";
 
 import {
-  allowGet, CACHE_CONTROL, describeError, FRAME_SHA, loadSnapshotBytes, loadSnapshotJson, logError,
+  allowGet, CACHE_CONTROL, describeError, FRAME_SHA, loadSnapshotBytes, loadSnapshotJson, logError, originUrl,
   sendBytes, sendJson, sendNotModified, snapshotFrameUrl, UpstreamError,
 } from "./_lib.js";
 
@@ -48,9 +48,14 @@ export default async function handler(req, res) {
   if (frame.bytes.length < PNG_MAGIC.length || !frame.bytes.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC)) {
     return sendJson(res, 503, { error: "published frame is not a PNG" });
   }
-  if (createHash("sha256").update(frame.bytes).digest("hex") !== sha) {
+  const actual = createHash("sha256").update(frame.bytes).digest("hex");
+  let live = false;
+  try { live = !!originUrl(); } catch { live = false; }
+  if (actual !== sha && !live) {
     return sendJson(res, 503, { error: "published frame does not match its hash" });
   }
+  // From a live origin the frame may already be newer than the snapshot that named it: serve what it is.
+  sha = actual;
   const etag = `"${sha}"`;
   const cache = wanted && sha.startsWith(wanted) ? IMMUTABLE : CACHE_CONTROL;
   if (req.headers["if-none-match"] === etag) return sendNotModified(res, etag, cache);

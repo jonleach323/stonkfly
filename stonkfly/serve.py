@@ -63,6 +63,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header("content-type", "application/json; charset=utf-8")
         self.send_header("cache-control", cache)
+        # Public read-only documents: a page hosted elsewhere (Vercel) may read them directly.
+        self.send_header("access-control-allow-origin", "*")
         self.send_header("content-length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -90,6 +92,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("content-type", "image/png")
                 self.send_header("cache-control", "no-store")
+                self.send_header("access-control-allow-origin", "*")
                 self.send_header("content-length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
