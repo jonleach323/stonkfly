@@ -1,4 +1,4 @@
-// Stonkfly watch page. Reads /api/state and /api/board, writes nothing.
+// Sat Rush Fly watch page. Reads /api/state and /api/board, writes nothing.
 // Every render is wrapped so a missing or odd field never takes the page down.
 
 const POLL_MS = 2000;
@@ -868,7 +868,7 @@ function route() {
     if (a.dataset.viewLink === view) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  document.title = view === "how" ? "HOW IT WORKS · STONKFLY" : "STONKFLY · a fly connectome plays SatRush";
+  document.title = view === "how" ? "HOW IT WORKS · SAT RUSH FLY" : "SAT RUSH FLY · a fly connectome plays SatRush";
   if (changed && hash !== "main") window.scrollTo(0, 0);
   if (app.scene) safe(() => app.scene.setVisible(view === "watch" && !document.hidden));
   if (view === "watch") loadScene();

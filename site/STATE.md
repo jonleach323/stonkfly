@@ -43,6 +43,7 @@ with six decimals. Times are Unix seconds (floats). `null` means unknown.
     "tile_stakes": [ { "stake_usd": 22.1, "miners": 7 }, … 21 entries, index 0 = tile 1 ],
     "previous_winners": [ { "round_id": 55680, "tile": 9 }, … newest first, up to 5 ],
     "previous_round": { "round_id": 55680, "winning_tile": 9, "pot_sats": 57742, "winners": 68, "miners": 77 } | null,
+    "vaults": { "strike_usd": 8243.4, "epoch_usd": 12117.0, "epoch_ends_at": 1789249738.8, "one_btc_btc": 0.911 },  // any field null when absent
     "prices": { "btc": 77211.3, "sat": 7.7e-7, … },
     "fetched_at": 1789105160.0
   },

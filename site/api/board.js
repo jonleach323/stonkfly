@@ -98,8 +98,29 @@ export function parseBoard(data, fetchedAt = nowSeconds()) {
     deployed_usd: toInt(active.deployed_pending_usd_amount, 0) + toInt(active.deployed_usd_amount, 0),
     previous_round: data.previous_round && typeof data.previous_round === "object" ? data.previous_round : null,
     previous_winners: previous,
+    vaults: vaultSummary(data),
     prices: data.prices && typeof data.prices === "object" ? data.prices : {},
     fetched_at: fetchedAt,
+  };
+}
+
+function finite(value) {
+  const n = typeof value === "string" ? Number(value.trim() === "" ? NaN : value) : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Port of `vault_summary`: the three prize vaults shown above the SatRush board, in display units. */
+export function vaultSummary(data) {
+  const obj = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
+  const strike = obj(data?.strike);
+  const epoch = obj(data?.epoch_vault);
+  const oneBtc = obj(data?.one_btc_vault);
+  const sats = finite(oneBtc.btc_amount);
+  return {
+    strike_usd: finite(strike.pool_combined_usd_amount),
+    epoch_usd: finite(epoch.active_pool_combined_usd_amount),
+    epoch_ends_at: epoch.iteration_ends_at ? utcSeconds(epoch.iteration_ends_at) : null,
+    one_btc_btc: sats === null ? null : sats / 1e8,
   };
 }
 
@@ -134,6 +155,7 @@ export function summarizeBoard(board) {
           miners: previous.miners_count ?? null,
         }
       : null,
+    vaults: board.vaults,
     prices,
     fetched_at: board.fetched_at,
   };

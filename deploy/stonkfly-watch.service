@@ -1,5 +1,5 @@
 [Unit]
-Description=Stonkfly watch page
+Description=Sat Rush Fly watch page
 After=stonkfly-worker.service
 
 [Service]

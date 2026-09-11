@@ -99,9 +99,33 @@ class Board:
                 "winners": previous.get("winners_count"),
                 "miners": previous.get("miners_count"),
             } if previous else None,
+            "vaults": vault_summary(self.raw),
             "prices": {k: v for k, v in self.prices.items() if isinstance(v, (int, float))},
             "fetched_at": self.fetched_at,
         }
+
+
+def _number(value):
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return None
+    return n if n == n and n not in (float("inf"), float("-inf")) else None
+
+
+def vault_summary(raw):
+    """The three prize vaults shown above the SatRush board, in display units."""
+    raw = raw or {}
+    strike = raw.get("strike") or {}
+    epoch = raw.get("epoch_vault") or {}
+    one_btc = raw.get("one_btc_vault") or {}
+    sats = _number(one_btc.get("btc_amount"))
+    return {
+        "strike_usd": _number(strike.get("pool_combined_usd_amount")),
+        "epoch_usd": _number(epoch.get("active_pool_combined_usd_amount")),
+        "epoch_ends_at": utc_seconds(epoch.get("iteration_ends_at")) if epoch.get("iteration_ends_at") else None,
+        "one_btc_btc": None if sats is None else sats / 1e8,
+    }
 
 
 def parse_board(data, fetched_at=None):

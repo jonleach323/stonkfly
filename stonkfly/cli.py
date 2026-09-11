@@ -118,6 +118,7 @@ def main():
     from .satrush.api import ENDPOINTS, FixtureApi, SatRushApi
 
     ledger = Ledger(out / "ledger.sqlite", settings, "live" if a.live else "paper")
+    playing = False  # Only a failure while playing halts the ledger; a bad .env is not a state to reconcile.
     try:
         api = (
             FixtureApi()
@@ -196,12 +197,13 @@ def main():
             settings, ledger, api, player, controller, Guard(settings, ledger, out / "STOP"), out,
             settle_margin=0.2 if a.fixture else 3.0, publisher=publisher,
         )
+        playing = True
         loop.run(a.steps)
     except KeyboardInterrupt:
         print("Stopped; run state preserved.", flush=True)
     except Exception as e:
         # Never print RPC/API exception text blindly: it may contain wallet details.
-        if not ledger.get("halted"):
+        if playing and not ledger.get("halted"):
             ledger.halt(type(e).__name__)
         frames = traceback.extract_tb(e.__traceback__)
         origin = frames[-1] if frames else None
@@ -212,10 +214,9 @@ def main():
             "locations": [f"{Path(f.filename).name}:{f.lineno} {f.name}" for f in frames],
         }
         (out / "error.json").write_text(json.dumps(diagnostic, indent=2) + "\n")
-        print(
-            f"Stopped safely: {type(e).__name__}. Inspect local state and reconcile before restarting.",
-            file=sys.stderr,
-        )
+        print(f"Stopped safely: {type(e).__name__}: {diagnostic['reason']}", file=sys.stderr)
+        if playing:
+            print("Inspect local state and reconcile before restarting.", file=sys.stderr)
         raise SystemExit(1) from None
     finally:
         ledger.close()
@@ -256,7 +257,13 @@ def live_player(settings, ledger, api, network):
     from .satrush.player import LivePlayer
     from .satrush.wallet import load_keypair
 
-    keypair = load_keypair(os.environ.get("SATRUSH_KEYPAIR", "satrush-keypair.json"))
+    try:
+        keypair = load_keypair(os.environ.get("SATRUSH_KEYPAIR", "satrush-keypair.json"))
+    except FileNotFoundError:
+        raise RuntimeError(
+            "No wallet key: set SATRUSH_KEYPAIR_JSON in .env (the 64-number array from `keygen`), "
+            "or SATRUSH_KEYPAIR to a keypair file the worker can read"
+        ) from None
     rpc = Rpc(os.environ.get("SATRUSH_RPC_URL") or ENDPOINTS[network]["rpc"])
     return LivePlayer(settings, ledger, api, rpc, keypair)
 

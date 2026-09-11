@@ -1,7 +1,7 @@
 # systemd unit for a bare-metal install (no Docker). Adjust paths, then:
 #   sudo cp deploy/stonkfly-*.service /etc/systemd/system/ && sudo systemctl enable --now stonkfly-worker stonkfly-watch
 [Unit]
-Description=Stonkfly worker (fly connectome playing SatRush)
+Description=Sat Rush Fly worker (fly connectome playing SatRush)
 After=network-online.target
 Wants=network-online.target
 

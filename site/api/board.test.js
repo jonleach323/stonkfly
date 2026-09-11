@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 
-import handler, { fetchBoardSummary, parseBoard, summarizeBoard, utcSeconds } from "./board.js";
+import handler, { fetchBoardSummary, parseBoard, summarizeBoard, utcSeconds, vaultSummary } from "./board.js";
 import { clearMemo, USER_AGENT } from "./_lib.js";
 
 const FIXTURE = JSON.parse(readFileSync(new URL("../../tests/fixtures/board.json", import.meta.url), "utf8"));
@@ -59,7 +59,7 @@ test("parses the public board fixture like the Python worker", () => {
   assert.equal(summary.fetched_at, 0);
   assert.deepEqual(Object.keys(summary), [
     "round_id", "state", "pending_activation", "started_at", "ends_at", "slots_remaining", "slot_ms",
-    "pot_usd", "miners", "tile_stakes", "previous_winners", "previous_round", "prices", "fetched_at",
+    "pot_usd", "miners", "tile_stakes", "previous_winners", "previous_round", "vaults", "prices", "fetched_at",
   ]);
   assert.doesNotThrow(() => JSON.stringify(summary)); // no BigInt leaks into the response
 });
@@ -183,4 +183,13 @@ test("devnet and mainnet defaults", async () => {
   assert.equal(satrushApiUrl({}), "https://api.satrush.io/api");
   assert.equal(satrushApiUrl({ SATRUSH_NETWORK: "devnet" }), "https://api-devnet.satrush.io/api");
   assert.equal(satrushApiUrl({ SATRUSH_API_URL: "http://localhost:9/api/" }), "http://localhost:9/api");
+});
+
+test("vaults are summarized in display units and tolerate missing data", () => {
+  const vaults = summarizeBoard(parseBoard(DATA, 0)).vaults;
+  assert.ok(vaults.strike_usd > 1000 && vaults.epoch_usd > 1000);
+  assert.ok(Math.abs(vaults.one_btc_btc - 0.91095706) < 1e-9);
+  assert.ok(vaults.epoch_ends_at > 1.7e9);
+  assert.deepEqual(vaultSummary({}), { strike_usd: null, epoch_usd: null, epoch_ends_at: null, one_btc_btc: null });
+  assert.deepEqual(vaultSummary({ strike: "x", one_btc_vault: { btc_amount: "nope" } }).one_btc_btc, null);
 });

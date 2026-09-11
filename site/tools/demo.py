@@ -60,7 +60,7 @@ def build(run, out, network="mainnet", artifact=False, live_board=True):
         head = re.search(r"<head>(.*?)</head>", html, re.S).group(1)
         body = re.search(r"<body[^>]*>(.*?)</body>", html, re.S).group(1)
         head = re.sub(r'<meta charset[^>]*>|<meta name="viewport"[^>]*>', "", head)
-        head = re.sub(r"<title>.*?</title>", "<title>Stonkfly Watch</title>", head, count=1)
+        head = re.sub(r"<title>.*?</title>", "<title>Sat Rush Fly Watch</title>", head, count=1)
         html = head.strip() + "\n" + body.strip() + "\n"
     (out / "index.html").write_text(html)
     return {"out": str(out), "tick": state.get("tick"), "live_board": board is not None, "captured_at": captured_at}

@@ -1,4 +1,4 @@
-# Stonkfly worker + watch page. One image, two commands (see deploy/entrypoint.sh).
+# Sat Rush Fly worker + watch page. One image, two commands (see deploy/entrypoint.sh).
 FROM python:3.11-slim
 
 RUN apt-get update \
@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir . && chmod +x /usr/local/bin/stonkfly-entrypoint
 ENV STONKFLY_DATA=/data \
     STONKFLY_RUNS=/runs \
     STONKFLY_SITE=/app/site \
+    STONKFLY_CONTAINER=1 \
     OPENBLAS_NUM_THREADS=1 \
     PYTHONUNBUFFERED=1
 VOLUME ["/data", "/runs"]

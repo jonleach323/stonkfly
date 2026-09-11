@@ -16,6 +16,11 @@ prepare_if_needed() {
   python -m stonkfly verify
 }
 
+# A bare keypair filename refers to the run volume: that is where `keygen` writes it.
+if [ -n "${SATRUSH_KEYPAIR:-}" ] && [ ! -f "$SATRUSH_KEYPAIR" ] && [ -f "$RUNS/$SATRUSH_KEYPAIR" ]; then
+  export SATRUSH_KEYPAIR="$RUNS/$SATRUSH_KEYPAIR"
+fi
+
 case "${1:-worker}" in
   worker)
     prepare_if_needed
@@ -34,7 +39,11 @@ case "${1:-worker}" in
     ;;
   watch)
     mkdir -p "$OUT"
-    exec python -m stonkfly serve --out "$OUT" --host 0.0.0.0 --port "${STONKFLY_WATCH_PORT:-8787}" --network "$NETWORK"
+    # In the container the page always listens on 8787; docker compose maps STONKFLY_WATCH_PORT on the
+    # host onto it. Outside a container (systemd) the variable is the listening port itself.
+    PORT=8787
+    [ -z "${STONKFLY_CONTAINER:-}" ] && PORT="${STONKFLY_WATCH_PORT:-8787}"
+    exec python -m stonkfly serve --out "$OUT" --host 0.0.0.0 --port "$PORT" --network "$NETWORK"
     ;;
   sh|bash|python|python3|cat)
     exec "$@"
