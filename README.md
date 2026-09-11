@@ -39,6 +39,8 @@ python -m pytest -q
 python -m stonkfly run --fixture --stub-brain --steps 5 --out runs/smoke   # no data, no network
 ```
 
+**On a server:** `cp .env.example .env && docker compose up -d` builds everything, plays in paper mode, and serves the watch page on port 8787. [Server notes](docs/operations.md#run-on-a-server).
+
 **Watch it:** `serve` hosts a read-only page next to any run directory: the fly at its terminal, the board it just saw, the tiles it chose, each round's result, and the neural counts behind it. The same page deploys to Vercel and reads snapshots the worker publishes. [Site notes](docs/site.md).
 
 The repo does not come funded or connected to anyone's wallet. Live execution needs your local keypair and explicit opt-in. Stonkfly is not affiliated with SatRush.

@@ -41,6 +41,23 @@ Devnet (`--network devnet`) uses the game's devnet API, RPC and mints. Devnet US
 - The ledger records the signed transaction signature before sending. An unconfirmed submission halts the worker; on restart, `reconcile` checks the signature and the deployment account before anything else. A rejected or expired transaction frees the round. A still-unknown outcome older than five minutes with no on-chain deployment is treated as failed; anything else stays halted for review.
 - The local process lock prevents two workers using one run directory. It does not coordinate multiple machines or copied ledgers.
 
+## Run on a server
+
+The repository ships a Docker image that plays and serves the watch page from one run directory.
+
+```sh
+git clone https://github.com/jonleach323/stonkfly && cd stonkfly
+cp .env.example .env        # STONKFLY_MODE=paper needs nothing else
+docker compose up -d        # builds the image, downloads and builds the dataset on first start
+docker compose logs -f worker
+```
+
+The page is at `http://127.0.0.1:8787/` on the host. Set `STONKFLY_WATCH_BIND=0.0.0.0` to expose it, or set `WATCH_DOMAIN` and run `docker compose --profile https up -d` for automatic HTTPS through Caddy.
+
+For live play, put the dedicated wallet's 64-byte array in `SATRUSH_KEYPAIR_JSON`, set `STONKFLY_MODE=live` and `STONKFLY_LIVE=I_ACCEPT_REAL_DEPLOYS`, then `docker compose up -d --force-recreate worker`. Run `docker compose run --rm worker run --live --preflight-only --network mainnet --out /runs/live` first to check balances without deploying.
+
+The dataset lives in the `data` volume (built once, about 1.6 GB) and run state in the `runs` volume; `docker compose down` keeps both, `docker compose down -v` deletes them. A halt (loss stop, unknown deploy outcome) exits the worker cleanly and it stays down until you review; see recovery below. `deploy/stonkfly-*.service` are systemd units for a bare-metal install with the same entrypoint.
+
 ## Watching a run
 
 `python -m stonkfly serve --out runs/paper` serves the watch page from the run directory and proxies the public board; it never writes to the run. `run --publish` uploads the same documents to Vercel Blob for the hosted page. Details in [site.md](site.md).

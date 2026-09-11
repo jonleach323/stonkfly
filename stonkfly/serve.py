@@ -5,6 +5,7 @@ here on demand, so the page works on a laptop with no hosting at all.
 """
 
 import json
+import os
 import threading
 import time
 import urllib.error
@@ -15,7 +16,16 @@ from pathlib import Path
 from .publish import audit, snapshot
 from .satrush.api import ENDPOINTS, SatRushApi
 
-SITE = Path(__file__).resolve().parent.parent / "site"
+
+def site_dir():
+    """The static page: STONKFLY_SITE, else the checkout's site/, else the container's /app/site."""
+    for candidate in [os.environ.get("STONKFLY_SITE"), Path(__file__).resolve().parent.parent / "site", "/app/site"]:
+        if candidate and (Path(candidate) / "index.html").exists():
+            return Path(candidate)
+    raise FileNotFoundError("site/ not found; set STONKFLY_SITE")
+
+
+SITE = None
 
 
 class BoardCache:
@@ -43,7 +53,7 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, run_dir=None, board=None, **kwargs):
         self.run_dir = run_dir
         self.board = board
-        super().__init__(*args, directory=str(SITE), **kwargs)
+        super().__init__(*args, directory=str(SITE or site_dir()), **kwargs)
 
     def log_message(self, format, *args):  # Quiet by default; the loop prints enough.
         pass

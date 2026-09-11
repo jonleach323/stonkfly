@@ -1,0 +1,50 @@
+# One command on any server with Docker: cp .env.example .env, edit it, then `docker compose up -d`.
+# The worker plays; the watch page reads the same run directory. Both restart on failure and stop
+# cleanly on halts (loss stop, unknown deploy outcome) instead of restart-looping.
+services:
+  worker:
+    build: .
+    image: stonkfly:latest
+    command: worker
+    env_file: .env
+    volumes:
+      - data:/data
+      - runs:/runs
+    restart: on-failure:10
+    stop_grace_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+
+  watch:
+    image: stonkfly:latest
+    command: watch
+    env_file: .env
+    volumes:
+      - runs:/runs:ro
+    ports:
+      - "${STONKFLY_WATCH_BIND:-127.0.0.1}:${STONKFLY_WATCH_PORT:-8787}:8787"
+    depends_on:
+      - worker
+    restart: unless-stopped
+
+  # Optional automatic HTTPS: `docker compose --profile https up -d` with WATCH_DOMAIN set.
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+    depends_on:
+      - watch
+    restart: unless-stopped
+
+volumes:
+  data:
+  runs:
+  caddy:
