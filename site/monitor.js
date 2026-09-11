@@ -357,7 +357,7 @@ function drawWaiting(ctx, now) {
   text(ctx, 'WAITING FOR SNAPSHOT', RAIL_X + RAIL_W / 2, GRID_TOP + 150, 16, COLORS.muted, 'center');
   if (blink) rect(ctx, RAIL_X + RAIL_W / 2 - 8, GRID_TOP + 170, 16, 20, COLORS.acid);
   rect(ctx, 0, FOOTER_Y, MONITOR_WIDTH, 2, COLORS.line);
-  text(ctx, 'STONKFLY · READ-ONLY SNAPSHOT', PAD, FOOTER_Y + 30, 16, COLORS.muted);
+  text(ctx, 'SAT RUSH FLY · READ-ONLY SNAPSHOT', PAD, FOOTER_Y + 30, 16, COLORS.muted);
 }
 
 // ---------------------------------------------------------------------------

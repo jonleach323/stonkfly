@@ -1,4 +1,4 @@
-# Stonkfly worker + watch page. One image, two commands (see deploy/entrypoint.sh).
+# Sat Rush Fly worker + watch page. One image, two commands (see deploy/entrypoint.sh).
 FROM python:3.11-slim
 
 RUN apt-get update \

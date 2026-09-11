@@ -1,6 +1,6 @@
-# Running and stopping Stonkfly
+# Running and stopping Sat Rush Fly
 
-Use a dedicated wallet. Stonkfly is an experiment capable of losing its entire allocated balance, and the game's fees make that the expected outcome over time. The funding cap is **100 USDC at initialization**.
+Use a dedicated wallet. Sat Rush Fly is an experiment capable of losing its entire allocated balance, and the game's fees make that the expected outcome over time. The funding cap is **100 USDC at initialization**.
 
 ## Installation and data
 

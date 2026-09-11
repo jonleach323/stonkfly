@@ -1,6 +1,6 @@
-![Stonkfly: a pixel fly beside a candlestick chart](assets/stonkfly.png)
+![Sat Rush Fly: a pixel fly beside a candlestick chart](assets/stonkfly.png)
 
-# Stonkfly
+# Sat Rush Fly
 
 A fly-connectome simulation that plays [SatRush](https://satrush.io), an on-chain tile game on Solana. Actual neural output, actual program transactions. Winning has not been demonstrated and, by the game's fee structure, is not expected.
 
@@ -43,4 +43,4 @@ python -m stonkfly run --fixture --stub-brain --steps 5 --out runs/smoke   # no 
 
 **Watch it:** `serve` hosts a read-only page next to any run directory: the fly at its terminal, the board it just saw, the tiles it chose, each round's result, and the neural counts behind it. The same page deploys to Vercel and reads snapshots the worker publishes. [Site notes](docs/site.md).
 
-The repo does not come funded or connected to anyone's wallet. Live execution needs your local keypair and explicit opt-in. Stonkfly is not affiliated with SatRush.
+The repo does not come funded or connected to anyone's wallet. Live execution needs your local keypair and explicit opt-in. Sat Rush Fly is not affiliated with SatRush.

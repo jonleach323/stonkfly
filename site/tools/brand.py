@@ -3,7 +3,7 @@
 
 Outputs (relative to --out, default: the ``site`` directory next to this file):
 
-    logo.svg     276x56 pixel wordmark: tiny fly glyph, STONKFLY, acid cursor block
+    logo.svg     56px-tall pixel wordmark: tiny fly glyph, SAT RUSH FLY, acid cursor block
     favicon.svg  16x16 pixel fly on a dark squircle
     share.png    1200x630 share card: large pixel fly, wordmark, tagline, 7x3 tiles
 
@@ -24,6 +24,8 @@ from PIL import Image, ImageDraw
 # ---------------------------------------------------------------------------
 # Palette (mirrors site/style.css tokens)
 # ---------------------------------------------------------------------------
+
+WORDMARK = "SAT RUSH FLY"
 
 BG = "#060709"
 PANEL = "#0e1015"
@@ -306,18 +308,18 @@ def svg_map(pixmap: list[str], palette: dict, scale: int, ox: int, oy: int) -> s
 
 
 def write_logo(path: Path) -> None:
-    """276x56: 69x14 cells of 4px. Fly | gap | STONKFLY | acid cursor block."""
+    """Height 56: 14 cells of 4px. Fly | gap | SAT RUSH FLY | acid cursor block. Width follows the text."""
     scale = 4
-    width, height = 276, 56
+    height = 56
     fly_x, fly_y = 0, 1  # cells
     text_x, text_y = 14, 3
-    cells, text_w = text_cells("STONKFLY", tracking=1)
+    cells, text_w = text_cells(WORDMARK, tracking=1)
     cursor_x = text_x + text_w + 1
-    assert (cursor_x + 2) * scale <= width, cursor_x
+    width = (cursor_x + 2) * scale
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
-        f'shape-rendering="crispEdges" role="img" aria-label="STONKFLY">',
-        "  <title>STONKFLY</title>",
+        f'shape-rendering="crispEdges" role="img" aria-label="{WORDMARK}">',
+        f"  <title>{WORDMARK}</title>",
         svg_map(FLY_MARK, FLY_MARK_PALETTE, scale, fly_x * scale, fly_y * scale),
         svg_group(set(cells), scale, text_x * scale, text_y * scale, INK),
         svg_group({(0, 0), (1, 0), (0, 1), (1, 1)}, scale, cursor_x * scale, (text_y + 5) * scale, ACID),
@@ -426,8 +428,8 @@ def write_share(path: Path) -> None:
     # --- right: wordmark, tagline, tiles -----------------------------------
     rx = 540
     ty = 112
-    wm_scale = 10
-    wm_w = draw_text(im, "STONKFLY", rx, ty, wm_scale, INK, tracking=1)
+    wm_scale = 7
+    wm_w = draw_text(im, WORDMARK, rx, ty, wm_scale, INK, tracking=1)
     # acid cursor block after the wordmark
     cx = rx + wm_w + wm_scale
     d.rectangle((cx, ty + 5 * wm_scale, cx + 2 * wm_scale - 1, ty + 7 * wm_scale - 1), fill=rgba(ACID))

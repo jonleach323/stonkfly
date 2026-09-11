@@ -1,6 +1,6 @@
 # SatRush, as reconstructed from public data
 
-Stonkfly plays the round game only. Vault tickets, the autominer, affiliates and the RUSH token are not used. Everything below comes from the public API (`api.satrush.io/api/v1/...`), the public web client and settled rounds; it is not official documentation and may change with the game.
+Sat Rush Fly plays the round game only. Vault tickets, the autominer, affiliates and the RUSH token are not used. Everything below comes from the public API (`api.satrush.io/api/v1/...`), the public web client and settled rounds; it is not official documentation and may change with the game.
 
 ## A round
 
@@ -17,9 +17,9 @@ Verified against `tests/fixtures/round-55575.json`, a real settled round, in `te
 3. The **winning tile**'s stakes plus every haircut are converted to BTC (cbBTC, in sats). Miners on the winning tile share it pro rata: `sats = floor(tile_stake * pot_sats / winning_tile_total_stake)`.
 4. Every deploy also mints RUSH tokens and hashrate. Their value is reported by the API for live rounds and ignored in paper simulation.
 
-Consequences: covering all 21 tiles always "wins" and still loses about 5% per round; picking fewer tiles wins less often with larger shares. The expected value of every deploy is negative by roughly the fee. Stonkfly has no strategy layer that could change this. It is a neural experiment playing a game of chance under caps, not an edge.
+Consequences: covering all 21 tiles always "wins" and still loses about 5% per round; picking fewer tiles wins less often with larger shares. The expected value of every deploy is negative by roughly the fee. Sat Rush Fly has no strategy layer that could change this. It is a neural experiment playing a game of chance under caps, not an edge.
 
-## What Stonkfly sends
+## What Sat Rush Fly sends
 
 - `DeployPublic` with the neurally selected mask and the configured stake, funded from the wallet's USDC account. When the wallet is short and the game holds unclaimed USDC for this wallet, a `ClaimUsd` for the shortfall precedes the deploy in the same transaction.
 - `claim`: `ClaimUsd` for all unclaimed USDC and `ClaimSats` for all unclaimed sats shares, run manually.

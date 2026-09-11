@@ -1,4 +1,4 @@
-# Stonkfly
+# Sat Rush Fly
 
 - Preserve the full retained MaleCNS v1.0 graph. No pruning, scripted tile picks presented as neural output, LLM policy, or hidden outcome-based tile selection.
 - Separate board observation, sensory proxies, neural propagation, plasticity, fixed decoding, and execution limits. The guard may veto a deploy; it must never choose replacement tiles or a different stake.
