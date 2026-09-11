@@ -31,6 +31,8 @@ python -m stonkfly run --frozen --steps 10 --out runs/frozen
 4. Once you have reviewed the output, run `python -m stonkfly run --live` yourself. `--stake` (1-10 USDC), `--loss-stop`, `--daily-deploys` and `--priority-fee` adjust the limits within their bounds.
 5. `python -m stonkfly claim` moves settled USDC and sats shares from the game to the wallet. Claiming sats pays the vault's 10% exit fee. Winnings left unclaimed also fund later deploys.
 
+If you run your own Solana RPC node, set `SATRUSH_RPC_URL` to it (from Docker on the same host: `http://host.docker.internal:8899`). The worker sends the deploy, polls `getSignatureStatuses` and reads a handful of accounts through it; the SatRush API is still used for the board and settled results. The node must be on mainnet-beta and answer `getSignatureStatuses` with `searchTransactionHistory` for signatures a few minutes old.
+
 Devnet (`--network devnet`) uses the game's devnet API, RPC and mints. Devnet USDC comes from the SatRush team's mint authority, not a public faucet.
 
 ## Execution guarantees and limits

@@ -7,6 +7,9 @@ services:
     image: stonkfly:latest
     command: worker
     env_file: .env
+    # Lets SATRUSH_RPC_URL=http://host.docker.internal:8899 reach an RPC node on the same host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - data:/data
       - runs:/runs
