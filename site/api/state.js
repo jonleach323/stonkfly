@@ -4,7 +4,7 @@
 // The page never gets write access to anything; this function only reads
 // the public Blob folder named by SNAPSHOT_BASE_URL.
 
-import { allowGet, describeError, loadSnapshotJson, nowSeconds, sendJson } from "./_lib.js";
+import { allowGet, describeError, hostingProblem, loadSnapshotJson, logError, nowSeconds, sendJson } from "./_lib.js";
 
 const SNAPSHOT_VERSION = 1;
 
@@ -16,12 +16,15 @@ export default async function handler(req, res) {
     const publication = state.publication && typeof state.publication === "object" ? state.publication : {};
     sendJson(res, 200, { ...state, publication: { ...publication, served_at } });
   } catch (error) {
-    // Hosting problems are not worker problems: answer 200 so the page can say "waiting" rather than "broken".
+    // Hosting problems are not worker problems: answer 200 so the page can say "waiting" rather than "broken",
+    // and say which layer failed so an unconfigured deployment is not mistaken for a worker that never started.
+    logError("state", error);
     sendJson(res, 200, {
       ready: false,
       version: SNAPSHOT_VERSION,
       published_at: null,
       error: describeError(error),
+      hosting: hostingProblem(error),
       publication: { served_at },
     });
   }

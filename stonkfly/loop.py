@@ -43,8 +43,9 @@ class GameLoop:
         if self.publisher is not None:
             try:
                 self.publisher(self.out)
+                self.l.put("publish_error", None)
             except Exception as e:  # Publication is observability, never control flow.
-                self.l.put("publish_error", type(e).__name__)
+                self.l.put("publish_error", f"{type(e).__name__}: {str(e)[:120]}")
 
     def wait_for_next_round(self, board):
         self.heartbeat("waiting for the round to settle")
@@ -102,8 +103,9 @@ class GameLoop:
         }
         self.l.commit_tick(equity, info, observation)
         execution = {"status": "VETO", "reason": "unset"}
+        available = self.player.available(board)
         try:
-            plan = self.guard.plan(board, neural["tiles"], equity, self.player.available(board), self.clock())
+            plan = self.guard.plan(board, neural["tiles"], equity, available, self.clock())
             # Neural integration takes wall time; re-read the board before sending.
             self.guard.before_submit(plan, self.api.board())
             self.heartbeat("deploying")
@@ -116,6 +118,7 @@ class GameLoop:
             "round_id": board.round_id,
             "mode": self.player.mode,
             "equity_usdc": str(equity),
+            "available_usdc": str(available),
             "in_play_usdc": str(sum(D(r["plan"]["stake_usd"]) for r in self.l.unsettled())),
             "stimulus": kind,
             "outcomes": outcomes,

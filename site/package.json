@@ -6,6 +6,6 @@
     "node": "22.x"
   },
   "scripts": {
-    "test": "node --test api/board.test.js"
+    "test": "node --test"
   }
 }

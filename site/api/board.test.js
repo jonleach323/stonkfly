@@ -22,6 +22,10 @@ test("utcSeconds keeps microseconds from nanosecond RFC 3339 stamps", () => {
   assert.equal(utcSeconds("2026-09-11T03:41:57Z"), 1789098117);
   assert.equal(utcSeconds("2026-09-11T05:41:57+02:00"), 1789098117);
   assert.equal(utcSeconds("2026-09-11T03:41:57.5+00:00"), 1789098117.5);
+  // Offsets without a colon or without minutes, as Python 3.11 fromisoformat accepts them.
+  assert.equal(utcSeconds("2026-09-11T05:41:57+0200"), 1789098117);
+  assert.equal(utcSeconds("2026-09-11T05:41:57+02"), 1789098117);
+  assert.equal(utcSeconds("2026-09-10T22:11:57-0530"), 1789098117);
   assert.equal(utcSeconds(1789105317329), 1789105317.329); // milliseconds
   assert.equal(utcSeconds(1789105317.5), 1789105317.5); // seconds
   assert.equal(utcSeconds(null), null);
@@ -88,6 +92,14 @@ test("rejects bad boards", () => {
   assert.throws(() => parseBoard({ ...DATA, start_slot: "soon" }), /Slot/);
 });
 
+test("integer fields follow Python int(): float strings are rejected, float numbers truncated", () => {
+  const withStake = (stake) => ({ ...DATA, active_round: { ...DATA.active_round, tile_stakes: DATA.active_round.tile_stakes.map((t, i) => (i === 0 ? { ...t, stake } : t)) } });
+  assert.throws(() => parseBoard(withStake("1.5")), /not an integer/);
+  assert.throws(() => parseBoard(withStake("1e6")), /not an integer/);
+  assert.equal(parseBoard(withStake(" +12 ")).tile_stakes[0][0], 12);
+  assert.equal(parseBoard(withStake(1.9)).tile_stakes[0][0], 1);
+});
+
 // ---------------------------------------------------------------------------
 // Handler against a stub upstream
 
@@ -109,9 +121,11 @@ test("handler proxies, memoizes and reports upstream failure", async (t) => {
   const appUrl = await listen(app);
   const savedEnv = { api: process.env.SATRUSH_API_URL, network: process.env.SATRUSH_NETWORK };
   process.env.SATRUSH_API_URL = `${stubUrl}/api/`;
+  const quiet = t.mock.method(console, "error", () => {}); // the handler logs every upstream failure
   t.after(() => {
     stub.close();
     app.close();
+    quiet.mock.restore();
     if (savedEnv.api === undefined) delete process.env.SATRUSH_API_URL; else process.env.SATRUSH_API_URL = savedEnv.api;
     if (savedEnv.network === undefined) delete process.env.SATRUSH_NETWORK; else process.env.SATRUSH_NETWORK = savedEnv.network;
     clearMemo();

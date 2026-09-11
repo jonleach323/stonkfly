@@ -12,11 +12,12 @@ const ROUND_SLOTS = 200;
 const $ = (id) => document.getElementById(id);
 const intFmt = new Intl.NumberFormat("en-US");
 const moneyFmt = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const moneyFmt4 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 const app = {
-  state: null, stateAt: 0, stateFails: 0, everFetched: false,
-  board: null, boardAt: 0, boardSkew: 0, boardFails: 0,
+  state: null, stateAt: 0, stateFails: 0, everFetched: false, lastError: "", stateSkew: 0,
+  board: null, boardAt: 0, boardSkew: null, boardFails: 0,
   scene: null, sceneLoading: false, sceneFailed: false,
   paused: false, view: "watch", tab: "rounds",
   frameSha: null, roundsKey: "", decisionsKey: "", chartKey: "",
@@ -32,17 +33,21 @@ function num(x) {
 }
 function pad(n) { return String(n).padStart(2, "0"); }
 function fmtInt(x) { const v = num(x); return v === null ? "—" : intFmt.format(Math.round(v)); }
-function fmtMoney(x, { sign = false } = {}) {
+function roundTo(v, digits) { const f = 10 ** digits; return Math.round(v * f) / f; }
+// Sign after rounding, so a sub-cent value never prints as "+$0.00" or "-$0.00"; per-round P&L uses 4 decimals.
+function fmtMoney(x, { sign = false, digits = 2 } = {}) {
   const v = num(x);
   if (v === null) return "—";
-  const s = v < 0 ? "-" : sign && v > 0 ? "+" : "";
-  return `${s}$${moneyFmt.format(Math.abs(v))}`;
+  const c = roundTo(v, digits);
+  const s = c < 0 ? "-" : sign && c > 0 ? "+" : "";
+  return `${s}$${(digits === 4 ? moneyFmt4 : moneyFmt).format(Math.abs(c))}`;
 }
 function fmtPct(x, { sign = true } = {}) {
   const v = num(x);
   if (v === null) return "—";
-  const s = v < 0 ? "-" : sign && v > 0 ? "+" : "";
-  return `${s}${Math.abs(v).toFixed(2)}%`;
+  const c = roundTo(v, 2);
+  const s = c < 0 ? "-" : sign && c > 0 ? "+" : "";
+  return `${s}${Math.abs(c).toFixed(2)}%`;
 }
 function fmtSats(n, usd) {
   const v = num(n);
@@ -50,16 +55,20 @@ function fmtSats(n, usd) {
   const u = num(usd);
   return `${intFmt.format(v)} SATS${u === null ? "" : ` (${fmtMoney(u)})`}`;
 }
+/** Wall time in Unix seconds on the server's clock: `publication.served_at` corrects this browser's clock. */
+function nowS() { return Date.now() / 1000 - app.stateSkew; }
+// UTC throughout (the daily deploy limit is a UTC day); a date is added once a stamp is older than a day.
 function fmtTime(t) {
   const v = num(t);
   if (v === null) return "—";
   const d = new Date(v * 1000);
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const hm = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  return nowS() - v > 86400 ? `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${hm}` : hm;
 }
 function fmtAge(t) {
   const v = num(t);
   if (v === null) return "—";
-  const s = Math.max(0, Date.now() / 1000 - v);
+  const s = Math.max(0, nowS() - v);
   if (s < 60) return `${Math.floor(s)}s`;
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
@@ -69,10 +78,11 @@ function fmtClock(seconds) {
   const s = Math.max(0, Math.ceil(seconds));
   return `${Math.floor(s / 60)}:${pad(s % 60)}`;
 }
-function signClass(x) {
+function signClass(x, digits = 2) {
   const v = num(x);
-  if (v === null || v === 0) return "";
-  return v > 0 ? "pos" : "neg";
+  if (v === null) return "";
+  const c = roundTo(v, digits);
+  return c > 0 ? "pos" : c < 0 ? "neg" : "";
 }
 function setText(id, text) {
   const el = $(id);
@@ -108,6 +118,23 @@ function safe(fn) {
 function explorerTx(signature, network) {
   return `https://solscan.io/tx/${encodeURIComponent(signature)}${network === "devnet" ? "?cluster=devnet" : ""}`;
 }
+function explorerAccount(address, network) {
+  return `https://solscan.io/account/${encodeURIComponent(address)}${network === "devnet" ? "?cluster=devnet" : ""}`;
+}
+/** Chance of a hit for the recent settled rounds: picking k of 21 tiles hits k/21 of the time. */
+function chanceHitRate(s) {
+  const settled = (Array.isArray(s.rounds) ? s.rounds : []).filter((r) => r.won === true || r.won === false);
+  if (!settled.length) return null;
+  const k = settled.reduce((a, r) => a + (num(r.tile_count) ?? (Array.isArray(r.tiles) ? r.tiles.length : 0)), 0) / settled.length;
+  return (k / 21) * 100;
+}
+/** Flag tables wider than their box so the CSS can fade the cut edge (overlay scrollbars show nothing). */
+function markOverflow() {
+  document.querySelectorAll(".scroll").forEach((box) => {
+    box.classList.toggle("overflowing", box.scrollWidth > box.clientWidth + 1);
+    box.classList.toggle("at-end", box.scrollLeft + box.clientWidth >= box.scrollWidth - 1);
+  });
+}
 function tileList(tiles) {
   return Array.isArray(tiles) ? tiles.map((t) => String(t)).join(" ") : "—";
 }
@@ -138,16 +165,31 @@ function pollDelay() { return document.hidden ? POLL_HIDDEN_MS : POLL_MS; }
 async function pollState() {
   const r = await getJSON("/api/state");
   app.everFetched = true;
-  if (r.body && typeof r.body === "object" && "ready" in r.body) {
-    app.state = r.body;
+  const b = r.body && typeof r.body === "object" && "ready" in r.body ? r.body : null;
+  // A not-ready document carrying an error is the hosting layer failing to read the snapshot, not the
+  // worker starting over: keep the last good snapshot and count a failure (three in a row reads DISCONNECTED).
+  const hostingError = !!(b && b.ready === false && b.error && app.state && app.state.ready);
+  if (r.ok && b && !hostingError) {
+    const wasReady = !!(app.state && app.state.ready);
+    app.state = b;
     app.stateAt = Date.now();
     app.stateFails = 0;
+    app.lastError = "";
+    const served = num(b.publication && b.publication.served_at);
+    if (served !== null) app.stateSkew = Date.now() / 1000 - served;
+    if (wasReady && !b.ready) safe(resetReady);
   } else {
     app.stateFails += 1;
+    app.lastError = String((b && b.error) || (r.status ? `HTTP ${r.status}` : ""));
   }
   safe(renderAll);
-  if (app.scene && app.state) safe(() => app.scene.update(app.state, (currentBoard() || {}).board || null));
+  sceneUpdate();
   schedule("state", pollState, pollDelay());
+}
+
+function sceneUpdate() {
+  if (!app.scene || !app.state) return;
+  safe(() => app.scene.update(app.state, (currentBoard() || {}).board || null, app.boardSkew ?? 0, { stale: app.stateFails >= 3 }));
 }
 
 async function pollBoard() {
@@ -158,14 +200,18 @@ async function pollBoard() {
     app.boardAt = Date.now();
     app.boardFails = 0;
     const fetched = num(b.fetched_at);
-    // Countdown runs on the server's clock: correct for skew between it and this browser.
-    app.boardSkew = fetched === null ? 0 : Date.now() / 1000 - fetched;
+    // Countdown runs on the server's clock. `now - fetched_at` overstates the skew by the response's age
+    // (proxy memo, CDN, latency), so keep the smallest lag seen; a jump of 30 s means a clock changed.
+    if (fetched !== null) {
+      const lag = Date.now() / 1000 - fetched;
+      if (app.boardSkew === null || lag < app.boardSkew || lag - app.boardSkew > 30) app.boardSkew = lag;
+    }
   } else {
     app.boardFails += 1;
   }
   safe(renderBoard);
   safe(tick);
-  if (app.scene && app.state) safe(() => app.scene.update(app.state, (currentBoard() || {}).board || null));
+  sceneUpdate();
   schedule("board", pollBoard, pollDelay());
 }
 
@@ -210,6 +256,27 @@ function renderWaiting() {
   if (e) { e.firstElementChild.textContent = "$—"; e.lastElementChild.textContent = ""; }
 }
 
+/** The worker started over (a not-ready snapshot after a ready one): drop every number from the old one. */
+function resetReady() {
+  app.roundsKey = ""; app.decisionsKey = ""; app.chartKey = ""; app.frameSha = null;
+  for (const id of ["pnl", "in-play", "h-cash", "h-inplay", "h-sats", "h-rounds", "h-hit", "s-cash", "s-fees", "s-refunds", "s-sats", "s-best", "perf-chip", "b-spikes", "b-edges", "b-time"]) setText(id, "—");
+  for (const id of ["pnl", "s-best"]) { const n = $(id); if (n) n.className = "num"; }
+  setChip("perf-chip", "—", "");
+  setText("value-unit", "USDC");
+  setText("pick-round", "");
+  setText("readout-cells", "");
+  const note = $("stage-note");
+  if (note) { note.textContent = "DECORATIVE AVATAR"; note.classList.remove("bad"); }
+  replaceChildren($("minigrid"), []);
+  replaceChildren($("rounds-body"), [el("tr", {}, el("td", { colspan: "8", class: "dim", text: "WAITING FOR WORKER" }))]);
+  replaceChildren($("decisions-body"), [el("tr", {}, el("td", { colspan: "6", class: "dim", text: "WAITING FOR WORKER" }))]);
+  const chart = $("equity-chart");
+  if (chart) chart.replaceChildren();
+  const img = $("sensory");
+  if (img) { img.hidden = true; const empty = $("sensory-empty"); if (empty) empty.hidden = false; }
+  markOverflow();
+}
+
 function renderBrain(s) {
   const n = s.neural || {};
   const model = s.model || {};
@@ -218,7 +285,7 @@ function renderBrain(s) {
   const edges = $("b-edges");
   if (edges) {
     const learning = !(s.settings && s.settings.learning === false);
-    replaceChildren(edges, [fmtInt(n.changed_edges), el("small", { text: learning ? "KC→MBON EDGES" : "FROZEN MEMORY" })]);
+    replaceChildren(edges, [fmtInt(n.changed_edges), el("small", { text: learning ? "KC-MBON EDGES" : "FROZEN MEMORY" })]);
   }
   const time = $("b-time");
   if (time) {
@@ -237,7 +304,9 @@ function renderBrain(s) {
 function renderPick(s) {
   const n = s.neural || {};
   const picks = new Set(Array.isArray(n.tiles) ? n.tiles : []);
-  const excess = Array.isArray(n.excess_rel) ? n.excess_rel : Array.isArray(n.excess_hz) ? n.excess_hz : [];
+  // Older readouts publish `excess_rel: []` and only `excess_hz`; an empty array is not a ranking.
+  const excess = [n.excess_rel, n.excess_hz].find((a) => Array.isArray(a) && a.length) || [];
+  const rel = excess === n.excess_rel;
   const hz = Array.isArray(n.group_hz) ? n.group_hz : [];
   let top = -1;
   let best = -Infinity;
@@ -250,7 +319,7 @@ function renderPick(s) {
       const lit = picks.has(tile);
       const bits = [];
       if (num(hz[i]) !== null) bits.push(`${num(hz[i]).toFixed(1)} Hz`);
-      if (num(excess[i]) !== null) bits.push(`excess ${num(excess[i]).toFixed(2)}`);
+      if (num(excess[i]) !== null) bits.push(`excess ${num(excess[i]).toFixed(2)}${rel ? "" : " Hz"}`);
       items.push(el("li", {
         class: `${lit ? "lit" : ""}${i === top && lit ? " top" : ""}`.trim() || null,
         title: `Tile ${tile}${bits.length ? ` · ${bits.join(" · ")}` : ""}`,
@@ -279,7 +348,7 @@ function renderPick(s) {
   else if (status === "FAILED") tone = "bad";
   else if (status === "PAPER") { statusText = "PAPER · SIMULATED"; tone = "info"; }
   setChip("pick-status", statusText.toUpperCase(), tone);
-  setChip("pick-meta", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)}`, "");
+  setChip("pick-meta", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)} UTC`, "");
 
   const stim = $("stimulus");
   if (stim) {
@@ -287,8 +356,8 @@ function renderPick(s) {
     const ms = num(n.stimulus_ms);
     const dur = ms && ms > 0 ? `${Math.round(ms)} ms` : "200 ms";
     let text = "NO ADDED REINFORCEMENT";
-    if (kind === "reward") text = `REWARD INPUT · ${dur} → 15 PAM11 CELLS · ${fmtInt(n.reward_spikes)} SPIKES`;
-    else if (kind === "aversive") text = `AVERSIVE INPUT · ${dur} → 2 PPL101 CELLS · ${fmtInt(n.aversive_spikes)} SPIKES`;
+    if (kind === "reward") text = `REWARD INPUT · ${dur} INTO 15 PAM11 CELLS · ${fmtInt(n.reward_spikes)} SPIKES`;
+    else if (kind === "aversive") text = `AVERSIVE INPUT · ${dur} INTO 2 PPL101 CELLS · ${fmtInt(n.aversive_spikes)} SPIKES`;
     const kc = num(n.KC_spikes);
     if (kc !== null) text += ` · KC ${fmtInt(kc)} SPIKES`;
     stim.textContent = text;
@@ -329,12 +398,23 @@ function renderStack(s) {
   renderFreshChip(s);
 }
 
-function renderFreshChip(s) {
+/** One verdict for the header chip and the footer: what the page can honestly say about the worker. */
+function workerHealth(s) {
   const st = s.status || {};
-  const age = Date.now() / 1000 - (num(s.observed_at) ?? 0);
-  if (st.halted) setChip("fresh-chip", `HALTED · ${String(st.halted).toUpperCase()}`, "bad");
-  else if (!st.running) setChip("fresh-chip", `STALE · OBSERVATION ${fmtAge(s.observed_at)} AGO`, "");
-  else setChip("fresh-chip", `OBSERVATION ${fmtAge(s.observed_at)} AGO`, age < 120 ? "ok" : "");
+  if (app.stateFails >= 3) return "disconnected";
+  if (st.halted) return "halted";
+  // `status.running` is frozen at publish time; a worker killed before its final publish keeps it true.
+  if (!st.running || nowS() - (num(st.heartbeat) ?? 0) > HEARTBEAT_MAX_AGE_S) return "stale";
+  return "ok";
+}
+
+function renderFreshChip(s) {
+  const health = workerHealth(s);
+  const age = `OBSERVATION ${fmtAge(s.observed_at)} AGO`;
+  if (health === "disconnected") setChip("fresh-chip", `DISCONNECTED · LAST ${age}`, "bad");
+  else if (health === "halted") setChip("fresh-chip", `HALTED · ${String(s.status.halted).toUpperCase()}`, "bad");
+  else if (health === "stale") setChip("fresh-chip", `STALE · ${age}`, "");
+  else setChip("fresh-chip", age, nowS() - (num(s.observed_at) ?? 0) < 120 ? "ok" : "");
 }
 
 function renderHoldings(s) {
@@ -347,18 +427,22 @@ function renderHoldings(s) {
     replaceChildren(sats, v === null ? ["—"] : [`${intFmt.format(v)} SATS`, el("small", { text: fmtMoney(p.sats_won_usd) })]);
   }
   setText("h-rounds", `${fmtInt(p.rounds_won)} / ${fmtInt(p.rounds_played)}`);
-  const hit = num(p.hit_rate_percent);
-  setText("h-hit", hit === null ? "—" : `${hit.toFixed(1)}%`);
+  const hitEl = $("h-hit");
+  if (hitEl) {
+    const hit = num(p.hit_rate_percent);
+    const chance = num(p.expected_hit_rate_percent) ?? chanceHitRate(s);
+    replaceChildren(hitEl, hit === null ? ["—"] : [`${hit.toFixed(1)}%`, el("small", { text: chance === null ? "" : `CHANCE ${chance.toFixed(1)}%` })]);
+  }
 }
 
 function renderRounds(s) {
   const rounds = Array.isArray(s.rounds) ? s.rounds : [];
-  const key = JSON.stringify(rounds.map((r) => [r.round_id, r.status, r.won, r.pnl, r.signature, r.sats]));
+  const key = JSON.stringify(rounds.map((r) => [r.round_id, r.status, r.won, r.pnl, r.signature, r.sats, r.token_usd]));
   if (key === app.roundsKey) return;
   app.roundsKey = key;
   const body = $("rounds-body");
   if (!body) return;
-  if (!rounds.length) { replaceChildren(body, [el("tr", {}, el("td", { colspan: "8", class: "dim", text: "NO ROUNDS YET" }))]); return; }
+  if (!rounds.length) { replaceChildren(body, [el("tr", {}, el("td", { colspan: "8", class: "dim", text: "NO ROUNDS YET" }))]); markOverflow(); return; }
   const rows = rounds.map((r) => {
     const status = String(r.status || "").toUpperCase();
     let result = "OPEN", tone = "dim";
@@ -374,19 +458,24 @@ function renderRounds(s) {
     const sats = num(r.sats);
     const tx = r.signature
       ? el("a", { href: explorerTx(r.signature, s.network), target: "_blank", rel: "noopener noreferrer", "aria-label": `Transaction for round ${r.round_id} on Solscan` }, ["TX ↗"])
-      : el("span", { class: "dim", text: status === "PAPER" || r.simulated ? "SIM" : "—" });
+      : el("span", { class: "dim", text: "—" });
+    // Live settlements add the RUSH token value the API reports to the round's P&L; say so where it happens.
+    const pnlCell = el("td", { class: signClass(r.pnl, 4) }, [fmtMoney(r.pnl, { sign: true, digits: 4 })]);
+    const token = num(r.token_usd);
+    if (token) pnlCell.append(el("small", { text: `incl. ${fmtMoney(token, { digits: 4 })} RUSH` }));
     return el("tr", {}, [
       el("td", {}, [`#${r.round_id ?? "—"}`, el("small", { text: fmtTime(r.time) })]),
-      el("td", {}, [String(r.tile_count ?? (Array.isArray(r.tiles) ? r.tiles.length : "—")), el("small", { text: tileList(r.tiles) })]),
-      el("td", { text: fmtMoney(r.stake) }),
       resultCell,
+      pnlCell,
+      el("td", { text: fmtMoney(r.stake) }),
       el("td", { text: fmtMoney(r.refund) }),
-      el("td", {}, sats === null ? ["—"] : [intFmt.format(sats), el("small", { text: fmtMoney(r.sats_usd) })]),
-      el("td", { class: signClass(r.pnl), text: fmtMoney(r.pnl, { sign: true }) }),
+      el("td", {}, sats === null ? ["—"] : [intFmt.format(sats), el("small", { text: fmtMoney(r.sats_usd, { digits: 4 }) })]),
+      el("td", {}, [String(r.tile_count ?? (Array.isArray(r.tiles) ? r.tiles.length : "—")), el("small", { text: tileList(r.tiles) })]),
       el("td", {}, [tx]),
     ]);
   });
   replaceChildren(body, rows);
+  markOverflow();
 }
 
 function renderDecisions(s) {
@@ -396,7 +485,7 @@ function renderDecisions(s) {
   app.decisionsKey = key;
   const body = $("decisions-body");
   if (!body) return;
-  if (!decisions.length) { replaceChildren(body, [el("tr", {}, el("td", { colspan: "6", class: "dim", text: "NO OBSERVATIONS YET" }))]); return; }
+  if (!decisions.length) { replaceChildren(body, [el("tr", {}, el("td", { colspan: "6", class: "dim", text: "NO OBSERVATIONS YET" }))]); markOverflow(); return; }
   const rows = decisions.map((d) => {
     const status = String(d.status || "").toUpperCase();
     const tone = status === "VETO" || status === "FAILED" ? "neg" : status === "CONFIRMED" ? "pos" : "";
@@ -406,13 +495,14 @@ function renderDecisions(s) {
     return el("tr", {}, [
       el("td", {}, [`#${d.tick ?? "—"}`, el("small", { text: fmtTime(d.time) })]),
       el("td", { text: d.round_id != null ? `#${d.round_id}` : "—" }),
-      el("td", {}, [String(d.tile_count ?? (Array.isArray(d.tiles) ? d.tiles.length : "—")), el("small", { text: tileList(d.tiles) })]),
       statusCell,
       el("td", { class: stim === "REWARD" ? "pos" : stim === "AVERSIVE" ? "neg" : "dim", text: stim }),
       el("td", { text: fmtInt(d.kc_spikes) }),
+      el("td", {}, [String(d.tile_count ?? (Array.isArray(d.tiles) ? d.tiles.length : "—")), el("small", { text: tileList(d.tiles) })]),
     ]);
   });
   replaceChildren(body, rows);
+  markOverflow();
 }
 
 function renderPerf(s) {
@@ -424,7 +514,7 @@ function renderPerf(s) {
   setText("s-refunds", fmtMoney(p.refunds));
   setText("s-sats", fmtSats(p.sats_won, p.sats_won_usd));
   const best = $("s-best");
-  if (best) { best.textContent = fmtMoney(p.best_round_pnl, { sign: true }); best.className = `num ${signClass(p.best_round_pnl)}`.trim(); }
+  if (best) { best.textContent = fmtMoney(p.best_round_pnl, { sign: true, digits: 4 }); best.className = `num ${signClass(p.best_round_pnl, 4)}`.trim(); }
   const chip = $("perf-chip");
   if (chip) {
     chip.textContent = `${fmtInt(p.rounds_played)} ROUNDS · ${fmtMoney(p.pnl, { sign: true })}${s.mode === "live" ? "" : " · SIMULATED"}`;
@@ -443,9 +533,9 @@ function renderChart(s) {
   if (!svg) return;
   const hist = (Array.isArray(s.history) ? s.history : []).map((h) => ({ t: num(h.time), v: num(h.equity) })).filter((h) => h.t !== null && h.v !== null);
   const initial = num(s.portfolio && s.portfolio.initial);
-  // Narrow screens get a narrower viewBox so axis text stays readable instead of scaling down.
+  // Draw at the real width so one unit is one CSS pixel: axis text and strokes keep their size at every width.
   const avail = svg.clientWidth || (svg.parentElement && svg.parentElement.clientWidth) || 0;
-  const W = avail > 0 && avail < 560 ? 360 : 640;
+  const W = Math.max(280, Math.round(avail || 640));
   const key = `${W}:${hist.length}:${hist.length ? hist[hist.length - 1].t : 0}:${hist.length ? hist[hist.length - 1].v : 0}:${initial}`;
   if (key === app.chartKey) return;
   app.chartKey = key;
@@ -457,7 +547,7 @@ function renderChart(s) {
     if (text !== undefined) n.textContent = text;
     return n;
   };
-  const H = 220, L = 58, R = 12, T = 14, B = 26;
+  const H = 220, R = 12, T = 14, B = 26;
   const nodes = [];
   if (hist.length < 2) {
     nodes.push(mk("text", { x: W / 2, y: H / 2, "text-anchor": "middle", class: "empty" }, hist.length ? "ONE OBSERVATION · NO CURVE YET" : "NO HISTORY YET"));
@@ -469,6 +559,9 @@ function renderChart(s) {
   let lo = Math.min(...values), hi = Math.max(...values);
   const padY = Math.max((hi - lo) * 0.15, 0.01);
   lo -= padY; hi += padY;
+  // The left gutter fits the longest label (10px Space Mono is about 6.2 units per glyph), so $12,345.67 is not cut.
+  const labels = [hi, lo].concat(initial === null ? [] : [initial]).map((v) => `$${moneyFmt.format(v)}`);
+  const L = 14 + Math.ceil(6.2 * Math.max(...labels.map((t) => t.length)));
   const x = (t) => L + ((t - t0) / Math.max(t1 - t0, 1)) * (W - L - R);
   const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
   // Steps, not slopes: equity only changes at observations.
@@ -485,10 +578,10 @@ function renderChart(s) {
     nodes.push(mk("line", { x1: L, x2: W - R, y1: y(initial).toFixed(1), y2: y(initial).toFixed(1), stroke: "#989aaa", "stroke-width": 2, "stroke-dasharray": "6 6", "shape-rendering": "crispEdges" }));
     nodes.push(mk("text", { x: L - 6, y: (y(initial) + 4).toFixed(1), "text-anchor": "end", class: "axis" }, `$${moneyFmt.format(initial)}`));
   }
-  // Skip an axis label that would sit on top of the starting-balance label.
+  // Skip an axis label that would touch the starting-balance label (each label is a 13 px box).
   const yInit = initial === null ? null : y(initial);
-  if (yInit === null || Math.abs(yInit - (T + 6)) > 12) nodes.push(mk("text", { x: L - 6, y: T + 10, "text-anchor": "end", class: "axis" }, `$${moneyFmt.format(hi)}`));
-  if (yInit === null || Math.abs(yInit - (H - B - 4)) > 12) nodes.push(mk("text", { x: L - 6, y: H - B, "text-anchor": "end", class: "axis" }, `$${moneyFmt.format(lo)}`));
+  if (yInit === null || yInit - T > 24) nodes.push(mk("text", { x: L - 6, y: T + 10, "text-anchor": "end", class: "axis" }, `$${moneyFmt.format(hi)}`));
+  if (yInit === null || (H - B) - yInit > 24) nodes.push(mk("text", { x: L - 6, y: H - B, "text-anchor": "end", class: "axis" }, `$${moneyFmt.format(lo)}`));
   nodes.push(mk("text", { x: L, y: H - 8, class: "axis" }, fmtTime(t0)));
   nodes.push(mk("text", { x: W - R, y: H - 8, "text-anchor": "end", class: "axis" }, fmtTime(t1)));
   nodes.push(mk("path", { d, fill: "none", stroke: color, "stroke-width": 3, "stroke-linejoin": "miter", "shape-rendering": "crispEdges" }));
@@ -508,7 +601,7 @@ function renderSensory(s) {
     const empty = $("sensory-empty");
     if (empty) empty.hidden = true;
   }
-  setText("sensory-meta", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)}${sha ? ` · SHA ${sha.slice(0, 8)}` : ""}`);
+  setText("sensory-meta", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)} UTC${sha ? ` · SHA ${sha.slice(0, 8)}` : ""}`);
 }
 
 function renderBoardChip(cb) {
@@ -516,6 +609,14 @@ function renderBoardChip(cb) {
   if (cb.source === "live") setChip("board-chip", "LIVE BOARD", "ok");
   else if (cb.source === "snapshot") setChip("board-chip", `SNAPSHOT · ${fmtAge(b.fetched_at)} AGO`, "");
   else setChip("board-chip", `STALE · ${fmtAge(b.fetched_at)} AGO`, "bad");
+}
+
+/** At most five glyphs, so the label fits a 31 px tile on a 360 px phone. */
+function stakeLabel(stake) {
+  if (stake === null) return "—";
+  if (stake >= 10000) return `$${Math.round(stake / 1000)}K`;
+  if (stake >= 1000) return `$${(stake / 1000).toFixed(1)}K`;
+  return `$${stake.toFixed(stake >= 100 ? 0 : 1)}`;
 }
 
 function renderBoard() {
@@ -560,10 +661,10 @@ function renderBoard() {
       if (stake === null) classes.push("empty");
       const li = el("li", {
         class: classes.join(" ") || null,
-        style: `--a:${(0.06 + 0.74 * share).toFixed(3)}`,
+        style: `--a:${(0.06 + 0.64 * share).toFixed(3)}`,
         "aria-label": `Tile ${tile}: ${stake === null ? "unknown stake" : fmtMoney(stake)}${st.miners != null ? `, ${st.miners} miners` : ""}${picks.has(tile) ? ", fly pick" : ""}${lastWin === tile ? ", last winner" : ""}`,
         title: `Tile ${tile} · ${stake === null ? "—" : fmtMoney(stake)}${st.miners != null ? ` · ${st.miners} miners` : ""}`,
-      }, [el("span", { text: String(tile) }), el("b", { text: stake === null ? "—" : stake >= 1000 ? `$${intFmt.format(Math.round(stake))}` : `$${stake.toFixed(stake >= 100 ? 0 : 1)}` })]);
+      }, [el("span", { text: String(tile) }), el("b", { text: stakeLabel(stake) })]);
       items.push(li);
     }
     replaceChildren(grid, items);
@@ -575,7 +676,7 @@ function renderBoard() {
   }
   const lw = $("last-winners");
   if (lw) {
-    replaceChildren(lw, winners.slice(0, 5).map((w) => el("li", { "aria-label": `Round ${w.round_id}: tile ${w.tile}` }, [String(w.tile ?? "—"), el("small", { text: w.round_id != null ? `R#${w.round_id}` : "" })])));
+    replaceChildren(lw, winners.slice(0, 5).map((w) => el("li", { "aria-label": `Round ${w.round_id}: tile ${w.tile}` }, [String(w.tile ?? "—"), el("small", { text: w.round_id != null ? `#${w.round_id}` : "" })])));
     if (!winners.length) lw.append(el("li", { class: "dim", text: "—" }));
   }
 }
@@ -593,7 +694,7 @@ function tick() {
     const b = cb.board;
     if (b.pending_activation) { text = "ROTATING"; frac = 1; cls = "rotating"; }
     else {
-      const now = Date.now() / 1000 - (cb.source === "snapshot" ? 0 : app.boardSkew);
+      const now = Date.now() / 1000 - (cb.source === "snapshot" ? app.stateSkew : (app.boardSkew ?? app.stateSkew));
       const endsAt = num(b.ends_at), startedAt = num(b.started_at), slotMs = num(b.slot_ms) || 316, slotsLeft = num(b.slots_remaining), fetchedAt = num(b.fetched_at);
       let remaining = null;
       if (endsAt !== null) remaining = endsAt - now;
@@ -625,18 +726,22 @@ function renderFooter() {
   let chip = "CONNECTING", tone = "";
   let fresh = "—", exec = "—";
   if (app.everFetched && !s) { chip = "DISCONNECTED"; tone = "bad"; fresh = "NO RESPONSE FROM /API/STATE"; }
-  else if (s && !s.ready) { chip = "WAITING FOR WORKER"; tone = ""; fresh = `NO LEDGER YET · PUBLISHED ${fmtTime(s.published_at)}`; }
-  else if (s) {
+  else if (s && !s.ready) {
+    chip = "WAITING FOR WORKER"; tone = "";
+    fresh = s.error ? `SNAPSHOT UNAVAILABLE · ${String(s.error).toUpperCase()}` : `NO LEDGER YET · PUBLISHED ${fmtTime(s.published_at)} UTC`;
+  } else if (s) {
     const st = s.status || {};
-    const heartbeatAge = Date.now() / 1000 - (num(st.heartbeat) ?? 0);
-    if (app.stateFails >= 3) { chip = "DISCONNECTED"; tone = "bad"; }
-    else if (st.halted) { chip = "WORKER HALTED"; tone = "bad"; }
-    else if (!st.running || heartbeatAge > HEARTBEAT_MAX_AGE_S) { chip = "STALE"; tone = ""; }
+    const health = workerHealth(s);
+    if (health === "disconnected") { chip = "DISCONNECTED"; tone = "bad"; }
+    else if (health === "halted") { chip = "WORKER HALTED"; tone = "bad"; }
+    else if (health === "stale") { chip = "STALE"; tone = ""; }
     else if (s.mode === "live") { chip = "LIVE WALLET"; tone = "ok"; }
-    else if (app.board && Date.now() - app.boardAt < LIVE_BOARD_MAX_AGE_MS && st.feed !== "fixture") { chip = "LIVE BOARD"; tone = "info"; }
+    else if (app.board && Date.now() - app.boardAt < LIVE_BOARD_MAX_AGE_MS && st.feed !== "fixture") { chip = "PAPER · LIVE BOARD"; tone = "info"; }
     else { chip = "PAPER SIMULATION"; tone = "info"; }
     const phase = String(st.phase || "stopped").toUpperCase();
-    fresh = `${phase} · OBSERVATION ${fmtAge(s.observed_at)} AGO`;
+    fresh = health === "disconnected"
+      ? `NO RESPONSE FROM /API/STATE${app.lastError ? ` · ${app.lastError.toUpperCase()}` : ""} · LAST OBSERVATION ${fmtAge(s.observed_at)} AGO`
+      : `${phase} · OBSERVATION ${fmtAge(s.observed_at)} AGO`;
     if (st.halted) fresh += ` · ${String(st.halted).toUpperCase()}`;
     if (s.mode === "live") exec = "LIVE WALLET · REAL DEPLOYS";
     else if (st.feed === "fixture") exec = "SYNTHETIC ROUNDS";
@@ -647,6 +752,17 @@ function renderFooter() {
   setChip("conn-chip", chip, tone);
   setText("foot-fresh", fresh);
   setText("foot-exec", exec);
+  const w = $("wallet-link");
+  if (w) {
+    const a = s && s.ready && s.wallet && s.wallet.address ? String(s.wallet.address) : "";
+    w.hidden = !a;
+    const href = a ? explorerAccount(a, s.network) : "";
+    if (a && w.getAttribute("href") !== href) {
+      w.href = href;
+      w.textContent = `WALLET ${a.slice(0, 4)}...${a.slice(-4)}`;
+      w.setAttribute("aria-label", `Wallet ${a} on Solscan`);
+    }
+  }
 }
 
 /* ---------------- scene ---------------- */
@@ -666,20 +782,25 @@ async function loadScene() {
   const canvas = $("output");
   if (!canvas) return;
   app.sceneLoading = true;
-  let hasGL = false;
+  // three r170 needs WebGL2, so a WebGL1-only browser gets the fallback without downloading the module;
+  // a software renderer (major performance caveat) gets the scene with the low-power hint.
+  let gl = null, strong = false;
   try {
-    const probe = document.createElement("canvas");
-    hasGL = !!(probe.getContext("webgl2") || probe.getContext("webgl"));
-  } catch (_) { hasGL = false; }
-  if (!hasGL) { app.sceneLoading = false; sceneFallback("WEBGL OFF"); return; }
+    gl = document.createElement("canvas").getContext("webgl2", { failIfMajorPerformanceCaveat: true });
+    strong = !!gl;
+    if (!gl) gl = document.createElement("canvas").getContext("webgl2");
+    const lose = gl && gl.getExtension("WEBGL_lose_context");
+    if (lose) lose.loseContext();
+  } catch (_) { gl = null; }
+  if (!gl) { app.sceneLoading = false; sceneFallback("WEBGL OFF"); return; }
   try {
     const mod = await import("/scene.js");
-    const scene = mod && typeof mod.startScene === "function" ? mod.startScene(canvas) : null;
+    const scene = mod && typeof mod.startScene === "function" ? mod.startScene(canvas, { lowPower: !strong }) : null;
     if (!scene || typeof scene.update !== "function") throw new Error("scene did not start");
     app.scene = scene;
     if (app.paused) safe(() => scene.setPaused(true));
     safe(() => scene.setVisible(app.view === "watch" && !document.hidden));
-    if (app.state) safe(() => scene.update(app.state, (currentBoard() || {}).board || null));
+    sceneUpdate();
   } catch (e) {
     console.warn("scene unavailable:", e && e.message ? e.message : e);
     sceneFallback("3D VIEW OFF");
@@ -692,7 +813,7 @@ function setPaused(paused) {
   app.paused = paused;
   document.body.classList.toggle("motion-paused", paused);
   const btn = $("pause-btn");
-  if (btn) { btn.setAttribute("aria-pressed", String(paused)); btn.textContent = paused ? "RESUME MOTION" : "PAUSE MOTION"; }
+  if (btn) { btn.classList.toggle("on", paused); btn.textContent = paused ? "RESUME MOTION" : "PAUSE MOTION"; }
   if (app.scene) safe(() => app.scene.setPaused(paused));
 }
 
@@ -726,6 +847,7 @@ function selectTab(name, focus) {
     if (panel) panel.hidden = !on;
     if (on && focus) t.focus();
   });
+  markOverflow();
 }
 
 function initTabs() {
@@ -758,7 +880,8 @@ function init() {
   const rechart = () => { app.chartKey = ""; if (app.state && app.state.ready) safe(() => renderChart(app.state)); };
   const perf = $("perf");
   if (perf) perf.addEventListener("toggle", rechart);
-  window.addEventListener("resize", () => schedule("rechart", rechart, 200));
+  window.addEventListener("resize", () => schedule("rechart", () => { rechart(); markOverflow(); }, 200));
+  document.querySelectorAll(".scroll").forEach((box) => box.addEventListener("scroll", () => schedule("overflow", markOverflow, 100), { passive: true }));
   document.addEventListener("visibilitychange", () => {
     if (app.scene) safe(() => app.scene.setVisible(app.view === "watch" && !document.hidden));
     if (!document.hidden) { schedule("state", pollState, 0); schedule("board", pollBoard, 0); }

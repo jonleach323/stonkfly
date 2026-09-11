@@ -2,8 +2,9 @@
 //
 // drawMonitor(ctx, state, board, now) draws onto a 960x540 2D canvas that
 // scene.js uploads as a CanvasTexture. It only reads the snapshot documented in
-// STATE.md; nothing here is a source of truth. The text sizes stay at or above
-// 16px so the screen remains legible once it is projected onto the CRT.
+// STATE.md; nothing here is a source of truth. Figures are drawn at 20px or
+// larger and secondary labels at 16px: the texture covers about a third of the
+// render width once projected onto the CRT, so anything smaller is a smear.
 
 export const MONITOR_WIDTH = 960;
 export const MONITOR_HEIGHT = 540;
@@ -64,10 +65,11 @@ function usd(value, decimals = 2) {
   return `${sign}$${body}`;
 }
 
+// Whole dollars from $1,000 so the 20px rail line still fits.
 function signedUsd(value) {
   const n = num(value);
   if (n === null) return '—';
-  return (n > 0 ? '+' : '') + usd(n);
+  return (n > 0 ? '+' : '') + usd(n, Math.abs(n) >= 1000 ? 0 : 2);
 }
 
 // Short stake label that fits a tile at 16px (4 glyphs max): "$0", "$2.2", "$30", "$12K".
@@ -202,16 +204,20 @@ function drawHeader(ctx, state, board, now) {
   text(ctx, `ROUND ${roundId}`, PAD, y + 28, 20, COLORS.ink);
 
   const barX = PAD + 20 * 12 + 24;
-  const barW = MONITOR_WIDTH - PAD - 20 * 4 - 16 - barX;
+  const barW = MONITOR_WIDTH - PAD - 20 * 8 - 16 - barX; // leaves room for 'ROTATING'
   rect(ctx, barX, y + 12, barW, 18, COLORS.panel);
   frame(ctx, barX, y + 12, barW, 18, COLORS.line, 2);
 
   const cd = countdown(board, now);
   let label = '—';
   if (cd) {
-    if (cd.pending) label = 'WAIT';
-    else if (cd.over) label = 'DRAW';
-    else label = `${Math.ceil(cd.remaining)}s`;
+    // Same words and m:ss as the page's LIVE BOARD panel.
+    if (cd.pending) label = 'ROTATING';
+    else if (cd.over) label = board.live === true ? 'DRAWING' : 'ENDED';
+    else {
+      const s = Math.ceil(cd.remaining);
+      label = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
     if (cd.fraction !== null && cd.fraction > 0) {
       const inner = Math.max(2, Math.round((barW - 8) * cd.fraction));
       rect(ctx, barX + 4, y + 16, inner, 10, cd.remaining < 10 ? COLORS.red : COLORS.acid);
@@ -226,7 +232,9 @@ function drawGrid(ctx, state, board) {
   const chosen = new Set(state && state.neural && Array.isArray(state.neural.tiles) ? state.neural.tiles : []);
 
   // Last winning tile: the board's newest previous winner, else the state board's.
-  const winners = (board && board.previous_winners) || (state && state.board && state.board.previous_winners) || [];
+  const winners = (board && Array.isArray(board.previous_winners) && board.previous_winners.length ? board.previous_winners : null)
+    || (board && board.previous_round && board.previous_round.winning_tile != null ? [{ tile: board.previous_round.winning_tile }] : null)
+    || (state && state.board && Array.isArray(state.board.previous_winners) ? state.board.previous_winners : []);
   const recent = new Map();
   winners.slice(0, 5).forEach((w, rank) => {
     if (w && w.tile != null && !recent.has(w.tile)) recent.set(w.tile, rank);
@@ -304,13 +312,11 @@ function drawRail(ctx, state, boardInfo) {
     const hit = last.won === true;
     const verdict = last.won === null || last.won === undefined ? 'OPEN' : (hit ? 'HIT' : 'MISS');
     text(ctx, `#${last.round_id} ${verdict}`, x, y + 28, 20, hit ? COLORS.acid : COLORS.red);
-    text(ctx, `REFUND ${usd(last.refund_usd)}`, x, y + 52, 16, COLORS.muted);
-    const sats = num(last.sats);
-    text(ctx, sats ? `${integer(sats)} SATS ${usd(last.sats_usd)}` : 'NO SATS', x, y + 74, 16, COLORS.muted);
+    // Refund and sats are in the page's ROUNDS table; only the P&L stays legible here.
     const pnl = num(last.pnl_usd);
-    text(ctx, `P&L ${signedUsd(pnl)}`, x, y + 96, 16, pnl !== null && pnl >= 0 ? COLORS.acid : COLORS.red);
+    text(ctx, `P&L ${signedUsd(pnl)}`, x, y + 56, 20, pnl !== null && pnl >= 0 ? COLORS.acid : COLORS.red);
   } else {
-    text(ctx, 'NONE SETTLED', x, y + 28, 16, COLORS.muted);
+    text(ctx, 'NONE SETTLED', x, y + 28, 20, COLORS.muted);
   }
 
   // DEPLOY block: reads PAPER or LIVE. It is a picture of a button, not one.
@@ -331,18 +337,19 @@ function drawFooter(ctx, state) {
   const tick = state && state.tick != null ? state.tick : '—';
   const brainMs = num(neural.brain_ms);
   const brain = brainMs === null ? '—' : (brainMs >= 1000 ? `${(brainMs / 1000).toFixed(1)}S` : `${Math.round(brainMs)}MS`);
-  text(ctx, `OBS #${tick} · BRAIN ${brain}`, PAD, FOOTER_Y + 30, 16, COLORS.muted);
+  text(ctx, `OBS #${tick} · BRAIN ${brain}`, PAD, FOOTER_Y + 30, 20, COLORS.muted);
   const spikes = num(neural.total_spikes);
-  text(ctx, spikes === null ? '' : `${integer(spikes)} SPIKES`, MONITOR_WIDTH - PAD, FOOTER_Y + 30, 16, COLORS.muted, 'right');
+  text(ctx, spikes === null ? '' : `${integer(spikes)} SPIKES`, MONITOR_WIDTH - PAD, FOOTER_Y + 30, 20, COLORS.muted, 'right');
 
   const status = (state && state.status) || {};
+  const modeLabel = neural.stub || status.stub_brain ? 'STUB BRAIN' : (state && state.mode === 'live' ? 'LIVE WALLET' : 'PAPER');
   let phase = (status.phase || 'no worker').toUpperCase();
   if (status.halted) phase = `HALTED · ${String(status.halted).toUpperCase()}`;
-  if (phase.length > 34) phase = `${phase.slice(0, 33)}…`;
-  text(ctx, phase, PAD, FOOTER_Y + 58, 16, status.halted ? COLORS.red : COLORS.muted);
-
-  const modeLabel = neural.stub || status.stub_brain ? 'STUB BRAIN' : (state && state.mode === 'live' ? 'LIVE WALLET' : 'PAPER');
-  text(ctx, modeLabel, MONITOR_WIDTH - PAD, FOOTER_Y + 58, 16, neural.stub || status.stub_brain ? COLORS.red : COLORS.acid, 'right');
+  // The phase takes whatever width the mode label leaves on the same line.
+  const maxChars = Math.floor((MONITOR_WIDTH - PAD * 2 - modeLabel.length * 20 - 16) / 20);
+  if (phase.length > maxChars) phase = `${phase.slice(0, maxChars - 1)}…`;
+  text(ctx, phase, PAD, FOOTER_Y + 58, 20, status.halted ? COLORS.red : COLORS.muted);
+  text(ctx, modeLabel, MONITOR_WIDTH - PAD, FOOTER_Y + 58, 20, neural.stub || status.stub_brain ? COLORS.red : COLORS.acid, 'right');
 }
 
 function drawWaiting(ctx, now) {

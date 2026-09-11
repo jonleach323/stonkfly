@@ -432,8 +432,8 @@ def write_share(path: Path) -> None:
     cx = rx + wm_w + wm_scale
     d.rectangle((cx, ty + 5 * wm_scale, cx + 2 * wm_scale - 1, ty + 7 * wm_scale - 1), fill=rgba(ACID))
     ty += 7 * wm_scale + 26
-    draw_text(im, "NEURAL MINING ON SAT RUSH", rx, ty, 4, ACID, tracking=1)
-    ty += 7 * 4 + 22
+    draw_text(im, "A FLY CONNECTOME PLAYS SATRUSH", rx, ty, 3, ACID, tracking=1)
+    ty += 7 * 3 + 22
     draw_text(im, "21 TILES · ONE DEPLOY PER ROUND · FIXED STAKE", rx, ty, 2, MUTED)
     ty += 7 * 2 + 10
     draw_text(im, "NO EDGE · EXPECTED LOSS · DECORATIVE AVATAR", rx, ty, 2, MUTED)

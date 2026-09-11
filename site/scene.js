@@ -210,10 +210,11 @@ function buildDesk(scene) {
 
   // Mug: an acid accent on the desk.
   const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.1, 10), standard(PALETTE.acid, { roughness: 0.6 }));
-  mug.position.set(-0.62, 0.795, -0.05);
+  // Front right of the desk, where it stays clear of the fly's head from the home camera.
+  mug.position.set(0.55, 0.795, 0.2);
   group.add(mug);
   const handle = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 6, 10), mug.material);
-  handle.position.set(-0.56, 0.8, -0.05);
+  handle.position.set(0.61, 0.8, 0.2);
   group.add(handle);
 
   scene.add(group);
@@ -449,14 +450,34 @@ export function startScene(canvas) {
 
   let latestState = null;
   let latestBoard = null;
+  let latestSkew = 0;   // this browser's clock minus the server's, in seconds
+  let lastKey = '';
+  // Everything the terminal shows that can change between two paints: the
+  // snapshot, the board document, the countdown second and the boot blink.
+  function monitorKey(now) {
+    const s = latestState || {};
+    const b = latestBoard || s.board || null;
+    const ends = b ? Number(b.ends_at) : NaN;
+    return [
+      s.published_at, s.tick, s.mode, s.ready ? 1 : 0,
+      b && b.round_id, b && b.fetched_at, b && b.state, b && b.pending_activation,
+      Number.isFinite(ends) ? Math.max(0, Math.ceil(ends - now)) : '',
+      s.ready ? '' : Math.floor(now * 2) & 1,
+    ].join('|');
+  }
+  // Repaint and re-upload the 960x540 texture only when its content changed.
   function paintMonitor() {
+    const now = Date.now() / 1000 - latestSkew;
+    const key = monitorKey(now);
+    if (key === lastKey) return;
     try {
-      drawMonitor(screenCtx, latestState, latestBoard);
+      drawMonitor(screenCtx, latestState, latestBoard, now);
+      lastKey = key;
+      screenTexture.needsUpdate = true;
     } catch (err) {
       // A drawing bug must not stop the avatar; leave the last frame on screen.
       if (typeof console !== 'undefined') console.warn('drawMonitor failed', err);
     }
-    screenTexture.needsUpdate = true;
   }
 
   // --- scene ----------------------------------------------------------------
@@ -565,10 +586,11 @@ export function startScene(canvas) {
   }
 
   // --- render state ---------------------------------------------------------
-  const reducedMotionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-  let reducedMotion = !!(reducedMotionQuery && reducedMotionQuery.matches);
+  // Reduced motion is the page's call: app.js starts those users paused and the
+  // PAUSE / RESUME button is the one control, so nothing here overrides it.
   let paused = false;
   let visible = true;
+  let onScreen = true;   // the canvas intersects the viewport
   let disposed = false;
   let contextLost = false;
   let rafId = 0;
@@ -646,7 +668,7 @@ export function startScene(canvas) {
   }
 
   function shouldRun() {
-    return !disposed && !contextLost && visible && !paused && !reducedMotion && !(typeof document !== 'undefined' && document.hidden);
+    return !disposed && !contextLost && visible && onScreen && !paused && !(typeof document !== 'undefined' && document.hidden);
   }
 
   function frame(nowMs) {
@@ -683,6 +705,11 @@ export function startScene(canvas) {
       return;
     }
     if (visible && !contextLost && resize()) {
+      // A still always shows the resting pose: transients only play in the loop.
+      anim.flash = 0;
+      anim.burstUntil = 0;
+      anim.shudderUntil = 0;
+      paintMonitor();
       animate(anim.t, 0);
       render();
     }
@@ -762,16 +789,6 @@ export function startScene(canvas) {
   }
   document.addEventListener('visibilitychange', onVisibilityChange);
 
-  function onMotionPreference(e) {
-    reducedMotion = !!e.matches;
-    if (reducedMotion) stopLoop();
-    kick();
-  }
-  if (reducedMotionQuery) {
-    if (typeof reducedMotionQuery.addEventListener === 'function') reducedMotionQuery.addEventListener('change', onMotionPreference);
-    else if (typeof reducedMotionQuery.addListener === 'function') reducedMotionQuery.addListener(onMotionPreference);
-  }
-
   let observer = null;
   function onResize() {
     if (resize()) kick();
@@ -783,25 +800,43 @@ export function startScene(canvas) {
     window.addEventListener('resize', onResize);
   }
 
+  // No frames while the canvas is scrolled out of view (the tables below the
+  // stage are where a phone spends its time).
+  let io = null;
+  if (typeof IntersectionObserver === 'function') {
+    io = new IntersectionObserver((entries) => {
+      onScreen = entries[entries.length - 1].isIntersecting;
+      if (!onScreen) stopLoop();
+      else kick();
+    }, { threshold: 0 });
+    io.observe(canvas);
+  }
+
   // Repaint the screen once the pixel font is available, if the page declared it.
   if (typeof document !== 'undefined' && document.fonts && typeof document.fonts.load === 'function') {
-    document.fonts.load('16px "Press Start 2P"').then(() => { paintMonitor(); if (!anim.running) kick(); }).catch(() => {});
+    document.fonts.load('16px "Press Start 2P"').then(() => { lastKey = ''; paintMonitor(); if (!anim.running) kick(); }).catch(() => {});
   }
 
   // --- public API -----------------------------------------------------------
-  function update(state, board) {
+  // skew: this browser's clock minus the server's, in seconds (app.js measures
+  // it from the live board's fetched_at), so the CRT countdown matches the page.
+  function update(state, board, skew = 0) {
     latestState = state || null;
     latestBoard = board || null;
-    monitorTickAt = performance.now();
-    paintMonitor();
+    latestSkew = Number.isFinite(skew) ? skew : 0;
+    if (visible) {
+      monitorTickAt = performance.now();
+      paintMonitor();
+    }
 
-    // React to a new observation; decorative only.
+    // React to a new observation; decorative only. The flash, flutter and
+    // shudder are transients, so they only start while the loop can play them.
     const tick = latestState && latestState.tick != null ? latestState.tick : null;
     const neural = (latestState && latestState.neural) || {};
     if (tick !== null && tick !== anim.lastTick) {
       const first = anim.lastTick === null;
       anim.lastTick = tick;
-      if (!first) {
+      if (!first && anim.running) {
         if (neural.stimulus === 'reward') {
           anim.burstUntil = anim.t + 1.2;
           anim.flash = 1;
@@ -850,13 +885,24 @@ export function startScene(canvas) {
     document.removeEventListener('visibilitychange', onVisibilityChange);
     if (observer) observer.disconnect();
     else window.removeEventListener('resize', onResize);
-    if (reducedMotionQuery) {
-      if (typeof reducedMotionQuery.removeEventListener === 'function') reducedMotionQuery.removeEventListener('change', onMotionPreference);
-      else if (typeof reducedMotionQuery.removeListener === 'function') reducedMotionQuery.removeListener(onMotionPreference);
+    if (io) io.disconnect();
+    // Release every GPU resource, then the context itself.
+    scene.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      const materials = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+      materials.forEach((m) => {
+        if (m.map) m.map.dispose();
+        m.dispose();
+      });
+    });
+    if (post) {
+      post.target.dispose();
+      post.material.dispose();
+      post.quadScene.children[0].geometry.dispose();
     }
-    if (post) post.target.dispose();
     screenTexture.dispose();
     renderer.dispose();
+    renderer.forceContextLoss();
   }
 
   // First frame: boot screen on the monitor, then start the loop (or a still).

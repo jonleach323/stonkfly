@@ -103,6 +103,14 @@ with six decimals. Times are Unix seconds (floats). `null` means unknown.
 }
 ```
 
+### Hosted additions
+
+The Vercel functions add `publication.served_at` (Unix seconds) and, when the
+snapshot cannot be served, answer `{"ready": false, "error": "…", "hosting":
+"unconfigured" | "unpublished" | "…"}` so the page can tell a missing worker
+from a missing deployment. Frames are published content-addressed as
+`frames/<sha256>.png` and `/api/sensory.png?sha=<sha256>` fetches one.
+
 ## `/api/board`
 
 `Board.summary()` of a fresh public board plus `"live": true`; same shape as
@@ -116,8 +124,12 @@ with six decimals. Times are Unix seconds (floats). `null` means unknown.
   "deployments": [ { "round_id": 55681, "status": "PAPER", "created": 1789105168.7, "tiles": [...], "selection_mask": 6543,
                      "amount_micro_usdc": 1000000, "signature": null, "explorer": null | "https://solscan.io/tx/…",
                      "outcome": {…} | null, "tick": 5, "input_sha256": "…", "spike_sha256": "…", "brain_ms": 2500.0 } ],
+  "network": "mainnet", "deployment_count": 5, "truncated": false,
   "note": "…" }
 ```
+
+The audit lists at most the 1,000 most recent deploy intents; `truncated` says
+when the worker's ledger holds more.
 
 ## Game facts the page may state
 

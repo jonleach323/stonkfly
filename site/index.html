@@ -15,31 +15,34 @@
 <meta property="og:image" content="/share.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Pixel fly at a terminal beside a 21-tile board, with the words STONKFLY: a fly connectome plays SatRush. No edge, expected loss.">
+<meta property="og:image:alt" content="Pixel-art fly beside the STONKFLY wordmark and a 21-tile board strip, with the words: a fly connectome plays SatRush. No edge, expected loss.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="STONKFLY · a fly connectome plays SatRush">
 <meta name="twitter:description" content="166,700 simulated neurons look at a 21-tile board and pick tiles. No edge, expected loss, decorative avatar.">
 <meta name="twitter:image" content="/share.png">
-<meta name="twitter:image:alt" content="Pixel fly at a terminal beside a 21-tile board, with the words STONKFLY: a fly connectome plays SatRush. No edge, expected loss.">
+<meta name="twitter:image:alt" content="Pixel-art fly beside the STONKFLY wordmark and a 21-tile board strip, with the words: a fly connectome plays SatRush. No edge, expected loss.">
 
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap">
 <link rel="stylesheet" href="/style.css">
 <script type="module" src="/app.js"></script>
+<noscript><style>#how-it-works[hidden]{display:block!important}#stage-fallback[hidden]{display:grid!important}#output,#stage-caption{display:none!important}</style></noscript>
 </head>
 <body>
 <a class="skip" href="#main">SKIP TO CONTENT</a>
 <div class="wrap">
 
 <header class="top">
-  <a class="wordmark" href="#watch"><img src="/logo.svg" width="276" height="56" alt="STONKFLY"></a>
+  <h1 class="wordmark"><a href="#watch"><img src="/logo.svg" width="276" height="56" alt="STONKFLY"></a></h1>
   <nav class="nav" aria-label="Views">
     <a href="#watch" data-view-link="watch" aria-current="page">WATCH</a>
     <a href="#how-it-works" data-view-link="how">HOW IT WORKS</a>
   </nav>
 </header>
+<noscript><p class="fine nojs">JavaScript is off: the live numbers on this page will not load. The mechanism and the caveats are under HOW IT WORKS below.</p></noscript>
 
 <main id="main">
 
@@ -52,17 +55,17 @@
       <span class="live-dot" aria-hidden="true"></span>
       <h2 id="theater-title" class="stage-title">FLY.EXE</h2>
       <span class="stage-note" id="stage-note">DECORATIVE AVATAR</span>
-      <button type="button" class="btn" id="pause-btn" aria-pressed="false">PAUSE MOTION</button>
+      <button type="button" class="btn" id="pause-btn">PAUSE MOTION</button>
     </div>
     <div class="stage">
-      <canvas id="output" aria-label="Decorative 3D fly at a terminal. Drag to orbit. Not a neural or muscle reconstruction."></canvas>
+      <canvas id="output" role="img" tabindex="0" aria-label="Decorative 3D fly at a terminal. Drag, or use the left and right arrow keys, to orbit. Not a neural or muscle reconstruction."></canvas>
       <div class="stage-fallback" id="stage-fallback" hidden>
         <pre class="ascii-fly" aria-hidden="true">   \ /
  -=(o)=-
    / \</pre>
         <p><b id="stage-fallback-title">3D VIEW OFF</b><br><span>The avatar is decorative. The numbers below are the experiment.</span></p>
       </div>
-      <p class="stage-caption" id="stage-caption">DRAG TO ORBIT</p>
+      <p class="stage-caption" id="stage-caption">DRAG OR ARROW KEYS TO ORBIT</p>
     </div>
 
     <dl class="brain-bar" aria-label="Latest neural observation">
@@ -86,7 +89,7 @@
 
   <section class="account" aria-labelledby="stack-title">
     <div class="stack-head">
-      <h1 id="stack-title">THE STACK</h1>
+      <h2 id="stack-title">THE STACK</h2>
       <span class="chip" id="fresh-chip">WAITING FOR WORKER</span>
     </div>
 
@@ -129,53 +132,58 @@
       <div><dt>USDC AVAILABLE</dt><dd class="num" id="h-cash">—</dd></div>
       <div><dt>IN PLAY</dt><dd class="num" id="h-inplay">—</dd></div>
       <div><dt>SATS WON</dt><dd class="num" id="h-sats">—</dd></div>
-      <div><dt>ROUNDS WON / PLAYED</dt><dd class="num" id="h-rounds">—</dd></div>
+      <div><dt>TILE HITS / ROUNDS</dt><dd class="num" id="h-rounds">—</dd></div>
       <div><dt>HIT RATE</dt><dd class="num" id="h-hit">—</dd></div>
     </dl>
+    <p class="fine holdings-note">A hit means the winning tile was among the picks; picking k of 21 tiles hits k/21 of rounds by chance. A hit is not a profit: the 6% fee and the 11% haircut on missed tiles come off first.</p>
+  </section>
 
-    <section class="panel activity" aria-labelledby="activity-title">
-      <header class="panel-head">
-        <h2 id="activity-title">ACTIVITY</h2>
-        <div class="tabs" role="tablist" aria-label="Activity">
-          <button type="button" role="tab" id="tab-rounds" data-tab="rounds" aria-selected="true" aria-controls="panel-rounds">ROUNDS</button>
-          <button type="button" role="tab" id="tab-decisions" data-tab="decisions" aria-selected="false" aria-controls="panel-decisions" tabindex="-1">DECISIONS</button>
-        </div>
-      </header>
-      <div role="tabpanel" id="panel-rounds" aria-labelledby="tab-rounds" tabindex="0">
-        <div class="scroll">
-          <table class="data">
-            <thead><tr><th scope="col">ROUND</th><th scope="col">TILES</th><th scope="col">STAKE</th><th scope="col">RESULT</th><th scope="col">REFUND</th><th scope="col">SATS</th><th scope="col">P&amp;L</th><th scope="col">TX</th></tr></thead>
-            <tbody id="rounds-body"><tr><td colspan="8" class="dim">WAITING FOR WORKER</td></tr></tbody>
-          </table>
-        </div>
+  <section class="panel activity" aria-labelledby="activity-title">
+    <header class="panel-head">
+      <h2 id="activity-title">ACTIVITY</h2>
+      <div class="tabs" role="tablist" aria-label="Activity">
+        <button type="button" role="tab" id="tab-rounds" data-tab="rounds" aria-selected="true" aria-controls="panel-rounds">ROUNDS</button>
+        <button type="button" role="tab" id="tab-decisions" data-tab="decisions" aria-selected="false" aria-controls="panel-decisions" tabindex="-1">DECISIONS</button>
       </div>
-      <div role="tabpanel" id="panel-decisions" aria-labelledby="tab-decisions" tabindex="0" hidden>
-        <div class="scroll">
-          <table class="data">
-            <thead><tr><th scope="col">OBS</th><th scope="col">ROUND</th><th scope="col">TILES</th><th scope="col">STATUS</th><th scope="col">STIMULUS</th><th scope="col">KC SPIKES</th></tr></thead>
-            <tbody id="decisions-body"><tr><td colspan="6" class="dim">WAITING FOR WORKER</td></tr></tbody>
-          </table>
-        </div>
+    </header>
+    <div role="tabpanel" id="panel-rounds" aria-labelledby="tab-rounds" tabindex="0">
+      <div class="scroll">
+        <table class="data">
+          <thead><tr><th scope="col">ROUND · UTC</th><th scope="col">RESULT</th><th scope="col">P&amp;L</th><th scope="col">STAKE</th><th scope="col">REFUND</th><th scope="col">SATS</th><th scope="col">TILES</th><th scope="col">TX</th></tr></thead>
+          <tbody id="rounds-body"><tr><td colspan="8" class="dim">WAITING FOR WORKER</td></tr></tbody>
+        </table>
       </div>
-    </section>
+    </div>
+    <div role="tabpanel" id="panel-decisions" aria-labelledby="tab-decisions" tabindex="0" hidden>
+      <div class="scroll">
+        <table class="data">
+          <thead><tr><th scope="col">OBS · UTC</th><th scope="col">ROUND</th><th scope="col">STATUS</th><th scope="col">STIMULUS</th><th scope="col">KC SPIKES</th><th scope="col">TILES</th></tr></thead>
+          <tbody id="decisions-body"><tr><td colspan="6" class="dim">WAITING FOR WORKER</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 
-    <details class="panel perf" id="perf">
-      <summary><h2>PERFORMANCE &amp; LIMITS</h2><span class="chip" id="perf-chip">—</span></summary>
+  <details class="panel perf" id="perf">
+    <summary><h2>PERFORMANCE &amp; LIMITS</h2><span class="chip" id="perf-chip">—</span></summary>
+    <div class="perf-body">
       <figure class="chart">
         <svg id="equity-chart" viewBox="0 0 640 220" role="img" aria-label="Equity over time" aria-describedby="chart-caption"></svg>
-        <figcaption id="chart-caption">EQUITY · USDC · DASHED = STARTING BALANCE</figcaption>
+        <figcaption id="chart-caption">EQUITY · USDC · DASHED = STARTING BALANCE · TIMES UTC</figcaption>
       </figure>
-      <dl class="stats" aria-label="Totals">
-        <div><dt>USDC</dt><dd class="num" id="s-cash">—</dd></div>
-        <div><dt>FEES PAID</dt><dd class="num" id="s-fees">—</dd></div>
-        <div><dt>REFUNDS</dt><dd class="num" id="s-refunds">—</dd></div>
-        <div><dt>SATS WON</dt><dd class="num" id="s-sats">—</dd></div>
-        <div><dt>BEST ROUND</dt><dd class="num" id="s-best">—</dd></div>
-      </dl>
-      <p class="limits" id="limits">$1 / ROUND · 300 DEPLOYS / DAY · 1 DEPLOY PER ROUND · LOSS STOP $20</p>
-      <p class="fine">Fees make every deploy negative in expectation. The loss stop halts new deploys; it does not cancel a round in progress or cap the game's fees.</p>
-    </details>
-  </section>
+      <div class="perf-side">
+        <dl class="stats" aria-label="Totals">
+          <div><dt>USDC</dt><dd class="num" id="s-cash">—</dd></div>
+          <div><dt>FEES PAID</dt><dd class="num" id="s-fees">—</dd></div>
+          <div><dt>REFUNDS</dt><dd class="num" id="s-refunds">—</dd></div>
+          <div><dt>SATS WON</dt><dd class="num" id="s-sats">—</dd></div>
+          <div><dt>BEST ROUND</dt><dd class="num" id="s-best">—</dd></div>
+        </dl>
+        <p class="limits" id="limits">$1 / ROUND · 300 DEPLOYS / DAY · 1 DEPLOY PER ROUND · LOSS STOP $20</p>
+        <p class="fine">Fees make every deploy negative in expectation. The loss stop halts new deploys; it does not cancel a round in progress or cap the game's fees.</p>
+      </div>
+    </div>
+  </details>
 
 </div>
 </section>
@@ -183,8 +191,8 @@
 <!-- ========================= HOW IT WORKS ========================= -->
 <section id="how-it-works" class="view" aria-label="How it works" hidden>
   <header class="how-head">
-    <h1>HOW IT WORKS</h1>
-    <p class="lede">Every round the public SatRush board is drawn as a 320×180 picture, shown to a simulated fly brain, and a fixed readout turns descending-neuron spikes into a tile choice. That is the whole mechanism. There is no strategy layer, and none could beat a random draw.</p>
+    <h2>HOW IT WORKS</h2>
+    <p class="lede">Every round the public SatRush board is drawn as a 320×180 picture, shown to a spiking network wired from a fly connectome, and a fixed readout turns descending-neuron spikes into a tile choice. That is the whole mechanism. There is no strategy layer, and none could beat a random draw.</p>
   </header>
 
   <ol class="steps">
@@ -230,7 +238,7 @@
           </svg>
         </figure>
         <h3>Spikes run through the whole retained graph.</h3>
-        <p><strong>MaleCNS v1.0</strong>: <strong>166,700 cells</strong> and <strong>25.6M connections</strong>, integrated as leaky integrate-and-fire neurons at 0.1 ms with a coarse transmitter-sign proxy. Each observation advances 500 ms of neural time inside a round of about 63 s. The anatomy is real; the physiology is an approximation, and nothing is pruned.</p>
+        <p><strong>MaleCNS v1.0</strong>: <strong>166,700 cells</strong> and <strong>25.6M connections</strong>, integrated as leaky integrate-and-fire neurons at 0.1 ms with a coarse transmitter-sign proxy. Each observation advances 500 ms of neural time inside a round of about 63 s. The wiring comes from a real reconstruction of a male fly's brain and nerve cord; the physiology is a coarse approximation, and nothing is pruned.</p>
       </article>
     </li>
     <li>
@@ -253,14 +261,14 @@
             <g fill="#7376ff"><rect x="216" y="46" width="4" height="8"/><rect x="216" y="66" width="4" height="8"/></g>
             <text x="46" y="30" class="figtext" fill="#bdff32" text-anchor="middle">21 DN GROUPS</text>
             <text x="146" y="30" class="figtext" fill="#989aaa" text-anchor="middle">VETO ONLY</text>
-            <text x="218" y="30" class="figtext" fill="#7376ff" text-anchor="middle">SOLANA</text>
+            <text x="238" y="30" class="figtext" fill="#7376ff" text-anchor="end">SOLANA</text>
             <text x="46" y="98" class="figtext" fill="#989aaa" text-anchor="middle">TILES</text>
             <text x="146" y="98" class="figtext" fill="#989aaa" text-anchor="middle">LIMITS</text>
-            <text x="218" y="98" class="figtext" fill="#989aaa" text-anchor="middle">1 DEPLOY</text>
+            <text x="238" y="98" class="figtext" fill="#989aaa" text-anchor="end">1 DEPLOY</text>
           </svg>
         </figure>
         <h3>A fixed readout, not a plan.</h3>
-        <p>Every descending neuron is sorted by ID and cut into <strong>21 pre-registered groups</strong>, one per tile<span id="readout-cells"></span>. A group firing above its own running average, beyond the median, proposes its tile; the largest excess is always in. A guard checks timing, budget, count and account state. It can veto; it never substitutes tiles. What passes becomes <strong>one <code>DeployPublic</code> per round on Solana</strong>. The stake is a fixed setting, never a neural quantity.</p>
+        <p>Every descending neuron is sorted by ID and cut into <strong>21 pre-registered groups</strong>, one per tile<span id="readout-cells"></span>. A group firing above its own running average, beyond the median, proposes its tile; the largest excess is always in. A guard checks timing, budget, count and account state. It can veto; it never substitutes tiles. What passes becomes at most <strong>one <code>DeployPublic</code> per round</strong>: in live mode it is sent to Solana from a dedicated wallet; in paper mode nothing is sent and the deploy is settled on paper against the real winning tile and pot. The stake is a fixed setting, never a neural quantity.</p>
       </article>
     </li>
     <li>
@@ -276,22 +284,22 @@
               <rect x="8" y="88" width="6" height="6"/><rect x="17" y="88" width="6" height="6"/><rect x="26" y="88" width="6" height="6"/><rect x="35" y="88" width="6" height="6"/><rect x="44" y="88" width="6" height="6"/><rect x="53" y="88" width="6" height="6"/><rect x="62" y="88" width="6" height="6"/><rect x="71" y="88" width="6" height="6"/><rect x="80" y="88" width="6" height="6"/><rect x="89" y="88" width="6" height="6"/><rect x="98" y="88" width="6" height="6"/><rect x="107" y="88" width="6" height="6"/><rect x="116" y="88" width="6" height="6"/><rect x="125" y="88" width="6" height="6"/><rect x="134" y="88" width="6" height="6"/>
             </g>
             <g fill="#ff4b78"><rect x="237" y="88" width="6" height="6"/><rect x="246" y="88" width="6" height="6"/></g>
-            <text x="8" y="112" class="figtext" fill="#bdff32">15 PAM11 · REWARD</text>
-            <text x="252" y="112" class="figtext" fill="#ff4b78" text-anchor="end">2 PPL101 · AVERSIVE</text>
+            <text x="8" y="112" class="figtext" fill="#bdff32">15 PAM11 REWARD</text>
+            <text x="252" y="112" class="figtext" fill="#ff4b78" text-anchor="end">2 PPL101 AVERSIVE</text>
           </svg>
         </figure>
         <h3>One pulse per settled round.</h3>
-        <p>When a round the fly played settles, its result is refund plus sats value minus the amount deployed. At least <strong>+0.01 USDC</strong> schedules a <strong>200 ms pulse into 15 PAM11</strong> dopamine cells; at most <strong>−0.01 USDC</strong>, the same pulse into <strong>2 PPL101</strong> cells. A candidate memory rule then adjusts existing KC→MBON connections. Fees count as loss, so most rounds are aversive. This is engineered reinforcement, not modeled pain or pleasure.</p>
+        <p>When a round the fly played settles, its result is refund plus sats value (plus, in live play, any RUSH token value the API reports) minus the amount deployed. At least <strong>+0.01 USDC</strong> schedules a <strong>200 ms pulse into 15 PAM11</strong> dopamine cells; at most <strong>−0.01 USDC</strong>, the same pulse into <strong>2 PPL101</strong> cells. A candidate memory rule then adjusts existing KC→MBON connections. Fees count as loss, so most rounds are aversive. This is engineered reinforcement, not modeled pain or pleasure.</p>
       </article>
     </li>
   </ol>
 
   <aside class="panel note" aria-labelledby="note-title">
-    <h2 id="note-title">CHANGING CONNECTIONS ≠ PROVEN SKILL.</h2>
+    <h2 id="note-title">CHANGING CONNECTIONS ARE NOT PROVEN SKILL.</h2>
     <ul>
       <li>The winning tile is drawn on chain. No reading of the board predicts it, and synaptic change is not evidence of learning to play well.</li>
       <li>Every deploy pays a 6% fee and each missed tile loses 11% of what was placed on it. Expected value is negative every round; the balance is expected to decline.</li>
-      <li>Paper mode settles hypothetical deploys from the real winning tile and pot. Results shown as PAPER are simulated. Only LIVE WALLET in the footer means real deploys.</li>
+      <li>Paper mode settles hypothetical deploys from the real winning tile and pot. Results tagged PAPER or SIM are simulated. Only LIVE WALLET in the footer means real deploys.</li>
       <li>The 3D fly is decorative. It is not a neural or muscle reconstruction.</li>
       <li>One worker owns the ledger. This page reads published snapshots and can change nothing.</li>
     </ul>
@@ -305,7 +313,7 @@
   <span class="chip" id="conn-chip" aria-live="polite">CONNECTING</span>
   <span id="foot-fresh">—</span>
   <span id="foot-exec">—</span>
-  <nav aria-label="Links"><a href="/api/audit">AUDIT</a><a href="https://github.com/jonleach323/stonkfly">SOURCE</a></nav>
+  <nav aria-label="Links"><a id="wallet-link" target="_blank" rel="noopener noreferrer" hidden>WALLET</a><a href="/api/audit">AUDIT</a><a href="https://github.com/jonleach323/stonkfly">SOURCE</a></nav>
   <span class="foot-note">NOT AFFILIATED WITH SATRUSH · READ ONLY</span>
 </footer>
 

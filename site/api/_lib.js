@@ -10,7 +10,8 @@ export const NO_STORE = "no-store";
 export const USER_AGENT = "stonkfly-watch/0.2 (+https://github.com/jonleach323/stonkfly)";
 export const MEMO_MS = 1000;
 export const UPSTREAM_TIMEOUT_MS = 8000;
-export const SNAPSHOT_FILES = new Set(["state.json", "audit.json", "sensory.png"]);
+export const SNAPSHOT_FILES = new Set(["state.json", "audit.json"]);
+export const FRAME_SHA = /^[0-9a-f]{64}$/;
 
 export class ConfigError extends Error {
   name = "ConfigError";
@@ -69,6 +70,12 @@ export function snapshotUrl(name, env = process.env) {
   return `${snapshotBaseUrl(env)}/${name}`;
 }
 
+/** The content-addressed frame `frames/<sha256>.png` the worker uploaded next to the snapshot. */
+export function snapshotFrameUrl(sha, env = process.env) {
+  if (!FRAME_SHA.test(String(sha || ""))) throw new ConfigError("Frame hash is not a SHA-256 hex digest");
+  return `${snapshotBaseUrl(env)}/frames/${sha}.png`;
+}
+
 /** Public SatRush API base, without a trailing slash. */
 export function satrushApiUrl(env = process.env) {
   const explicit = String(env.SATRUSH_API_URL || "").trim().replace(/\/+$/, "");
@@ -107,12 +114,11 @@ export function loadSnapshotJson(name, env = process.env) {
   });
 }
 
-/** Raw snapshot bytes (`sensory.png`), memoized for a second. */
-export function loadSnapshotBytes(name, accept, env = process.env) {
-  const url = snapshotUrl(name, env);
+/** Raw bytes of one published file (a frame), memoized for a second. */
+export function loadSnapshotBytes(url, accept) {
   return memo(url, async () => {
     const response = await fetchUpstream(url, { accept });
-    if (!response.ok) throw new UpstreamError(`${name}: upstream answered HTTP ${response.status}`, response.status);
+    if (!response.ok) throw new UpstreamError(`frame: upstream answered HTTP ${response.status}`, response.status);
     return {
       bytes: Buffer.from(await response.arrayBuffer()),
       contentType: response.headers.get("content-type") || "",
@@ -122,17 +128,30 @@ export function loadSnapshotBytes(name, accept, env = process.env) {
   });
 }
 
-/** One short line for the `error` field; never a stack trace. */
+/**
+ * One short line for the public `error` field. Only our own phrases reach viewers: UpstreamError messages
+ * are written here, everything else (env var names, hostnames, undici causes) is summarized and logged.
+ */
 export function describeError(error) {
   if (!error) return "unknown error";
   if (error.name === "TimeoutError" || error.name === "AbortError") {
     return `upstream timed out after ${Math.round(UPSTREAM_TIMEOUT_MS / 1000)} s`;
   }
-  // undici wraps network failures: the useful code sits on `cause`, or on the first of an AggregateError's `errors`.
-  const inner = error.cause && Array.isArray(error.cause.errors) && error.cause.errors.length ? error.cause.errors[0] : error.cause;
-  const cause = inner && (inner.code || inner.message) ? ` (${inner.code || inner.message})` : "";
-  const text = `${error.name || "Error"}: ${error.message || ""}${cause}`.replace(/\s+/g, " ").trim();
-  return text.length > 200 ? `${text.slice(0, 197)}...` : text;
+  if (error.name === "ConfigError") return "hosting not configured";
+  if (error.name === "UpstreamError") return String(error.message || "upstream failed").replace(/\s+/g, " ").slice(0, 200);
+  return "upstream unreachable";
+}
+
+/** Why a snapshot could not be served: the deployment, the worker, or the network between them. */
+export function hostingProblem(error) {
+  if (error && error.name === "ConfigError") return "unconfigured";
+  if (error && error.name === "UpstreamError" && error.status === 404) return "unpublished";
+  return "unreachable";
+}
+
+/** The detail describeError withholds goes to the runtime log. */
+export function logError(context, error) {
+  console.error(`[${context}]`, error);
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +175,14 @@ export function sendBytes(res, status, bytes, contentType, extraHeaders = {}, ca
   res.setHeader("x-content-type-options", "nosniff");
   for (const [key, value] of Object.entries(extraHeaders)) if (value) res.setHeader(key, value);
   res.end(bytes);
+}
+
+export function sendNotModified(res, etag, cache = CACHE_CONTROL) {
+  res.statusCode = 304;
+  res.setHeader("etag", etag);
+  res.setHeader("cache-control", cache);
+  res.setHeader("x-content-type-options", "nosniff");
+  res.end();
 }
 
 /** These endpoints are read-only: anything but GET/HEAD gets a 405. Returns false when the response was already sent. */

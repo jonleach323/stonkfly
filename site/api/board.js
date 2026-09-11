@@ -4,11 +4,13 @@
 // The proxy exists because the game's edge blocks browser and default user
 // agents; it adds no data of its own. Memoized for one second per instance.
 
-import { allowGet, describeError, fetchUpstream, memo, nowSeconds, satrushApiUrl, sendJson, UpstreamError } from "./_lib.js";
+import { allowGet, describeError, fetchUpstream, logError, memo, nowSeconds, satrushApiUrl, sendJson, UpstreamError } from "./_lib.js";
 
 export const TILES = 21;
 const U64_MAX = (1n << 64n) - 1n;
-const ISO = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?\s*(Z|z|[+-]\d{2}:?\d{2})?$/;
+// Zone forms Python's fromisoformat accepts: Z, +HH:MM, +HHMM and +HH.
+const ISO = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?\s*(Z|z|[+-]\d{2}(?::?\d{2})?)?$/;
+const INTEGER = /^\s*[+-]?\d+\s*$/;
 
 /** Port of `utc_seconds`: RFC 3339 (any number of fractional digits) or a number → Unix seconds. */
 export function utcSeconds(value) {
@@ -29,7 +31,7 @@ export function utcSeconds(value) {
   let offset = 0;
   if (zone !== "Z" && zone !== "z") {
     const sign = zone[0] === "-" ? -1 : 1;
-    const digits = zone.slice(1).replace(":", "");
+    const digits = zone.slice(1).replace(":", "").padEnd(4, "0");
     offset = sign * (Number(digits.slice(0, 2)) * 3600 + Number(digits.slice(2, 4)) * 60);
   }
   return whole + micro - offset;
@@ -45,6 +47,8 @@ function toInt(value, fallback) {
     if (fallback !== undefined) return fallback;
     throw new TypeError("Board field is missing");
   }
+  // Python truncates a float but rejects a non-integer string ("1.5"): a malformed stake must not become money.
+  if (typeof value !== "number" && !INTEGER.test(String(value))) throw new TypeError("Board field is not an integer");
   const n = typeof value === "number" ? value : Number(String(value).trim());
   if (!Number.isFinite(n)) throw new TypeError("Board field is not a number");
   return Math.trunc(n);
@@ -103,6 +107,8 @@ export function parseBoard(data, fetchedAt = nowSeconds()) {
 export function summarizeBoard(board) {
   const pending = board.start_slot === U64_MAX;
   const previous = board.previous_round && Object.keys(board.previous_round).length ? board.previous_round : null;
+  // Deliberate difference from Python, which keeps every price value: only finite numbers are prices here
+  // (a boolean, string or NaN in the upstream feed would otherwise reach the page, or break the JSON).
   const prices = {};
   for (const [key, value] of Object.entries(board.prices)) {
     if (typeof value === "number" && Number.isFinite(value)) prices[key] = value;
@@ -147,7 +153,12 @@ export async function fetchBoardSummary(env = process.env) {
   if (!payload || typeof payload !== "object" || !("data" in payload)) {
     throw new UpstreamError("SatRush API answered without a data envelope");
   }
-  return { ...summarizeBoard(parseBoard(payload.data, nowSeconds())), live: true };
+  try {
+    return { ...summarizeBoard(parseBoard(payload.data, nowSeconds())), live: true };
+  } catch (error) {
+    if (error instanceof UpstreamError) throw error;
+    throw new UpstreamError(`SatRush board is malformed: ${error && error.message ? error.message : error}`);
+  }
 }
 
 export default async function handler(req, res) {
@@ -156,6 +167,7 @@ export default async function handler(req, res) {
     const board = await memo(`board:${satrushApiUrl()}`, () => fetchBoardSummary());
     sendJson(res, 200, board);
   } catch (error) {
+    logError("board", error);
     sendJson(res, 502, { live: false, error: describeError(error) });
   }
 }

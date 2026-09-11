@@ -2,7 +2,7 @@
 
 Recorded during implementation on 2026-09-11. All transaction tests use an in-memory RPC double; **no real deploys or funded-wallet checks were performed**.
 
-Final local result: **46 tests passed**, plus the opt-in full-connectome test on the freshly prepared MaleCNS graph.
+Final local result: **56 tests passed** plus the opt-in full-connectome test on the freshly prepared MaleCNS graph, and 11 Node tests for the hosted functions.
 
 | Check | Observed result | What it does not establish |
 | --- | --- | --- |
@@ -13,6 +13,8 @@ Final local result: **46 tests passed**, plus the opt-in full-connectome test on
 | Full-network sensory/feedback test on a real board frame | The frame drives Kenyon cells; reward and aversive pulses spike the identified DAN cells; eligible synapses change; reward differs from an unpaired control; frozen memory stays unchanged; checkpoints restore | Accurate fly vision or an acquired association |
 | Palette probe | Blue tile ramps gave about 10 KC spikes on some boards and about 4,500 on others; the warm ramp gave 2,300-4,400 on all four boards probed | That the active regime is the biologically right one |
 | Real-brain paper play against the live board | Consecutive real rounds observed, tiles chosen by the DN readout, deploys simulated and settled from real results, aversive pulses delivered on losses, 5 s per observation | A real game return; an edge of any kind |
+
+| Watch site | 11 Node tests (board parser parity with the Python parser on a real board, snapshot functions, caching, 304s); page rendered against the real paper run at 1440/1100/1000/820/400/360 px with no horizontal scroll or console errors; five-lens adversarial review (data, visual, scene, hosting, content) produced 66 findings, of which the fixers verified and applied 60 and rejected 6 with reasons | A Vercel deployment (none was made here) or real-browser WebGL performance |
 
 Before any live use, the operator should run `python -m stonkfly run --live --preflight-only` and then a single-step live run with the minimum stake, and inspect the transaction on an explorer. The on-chain program can change; PDAs and discriminators would then need re-verification against `satrush.io`'s client.
 

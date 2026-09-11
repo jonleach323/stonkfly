@@ -8,8 +8,10 @@ the public wallet address does, because every deploy is public on chain.
 import hashlib
 import json
 import os
+import secrets
 import sqlite3
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from decimal import Decimal
@@ -22,10 +24,18 @@ MODEL = {
     "connectome": "MaleCNS v1.0",
     "neurons": 166700,
     "retained_edges": 25582938,
-    "readout": "dn-21-group-relative-median-v3",
+    "readout": "dn-21-group-relative-median-v3",  # overridden by the run's provenance (readout.model)
     "learning_validated": False,
 }
 PROGRAM = "satRushGBRY2vgapeTAkoxz26vL2cYqyPi6CnBj7Tco"
+# Deploy intents in audit.json, newest first; the ledger keeps every one. A month-long run makes tens of
+# thousands of rows, and the whole document is re-uploaded whenever a row changes.
+AUDIT_LIMIT = 1000
+# Statuses whose signature is public: the transaction was sent, whether or not its outcome is known yet.
+SIGNED = ("CONFIRMED", "SETTLED", "SENT", "UNKNOWN")
+# Vercel Blob's minimum edge cache lifetime for an overwritten blob (its docs: "cannot be set lower than 1 minute").
+BLOB_MAX_AGE = 60
+FRAME_MAX_AGE = 31536000  # content-addressed frames never change
 
 
 def _read_meta(path):
@@ -75,6 +85,31 @@ def _num(value, default=0.0):
         return default
 
 
+def _provenance(out):
+    path = Path(out) / "provenance.json"
+    if not path.exists():
+        return {}
+    try:
+        doc = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _network(provenance):
+    return (provenance.get("settings") or {}).get("network", "mainnet")
+
+
+def _model(provenance):
+    """MODEL with the readout the run actually declared; the constant is only a fallback."""
+    readout = (provenance.get("readout") or {}).get("model") or MODEL["readout"]
+    return {**MODEL, "readout": readout}
+
+
+def _explorer(kind, ident, network):
+    return f"https://solscan.io/{kind}/{ident}" + ("?cluster=devnet" if network == "devnet" else "")
+
+
 def _round_row(row):
     plan, outcome = row["plan"], row["outcome"] or {}
     stake = D(plan["stake_usd"])
@@ -86,7 +121,7 @@ def _round_row(row):
         "tiles": plan["tiles"],
         "tile_count": len(plan["tiles"]),
         "stake": _money(stake),
-        "signature": row["signature"] if row["status"] in ("CONFIRMED", "SETTLED", "SENT", "UNKNOWN") else None,
+        "signature": row["signature"] if row["status"] in SIGNED else None,
         "won": outcome.get("won"),
         "winning_tile": outcome.get("winning_tile"),
         "refund": _money(outcome["refund_usd"]) if outcome.get("refund_usd") is not None else None,
@@ -108,25 +143,30 @@ def snapshot(out, now=None):
         return {"ready": False, "version": SNAPSHOT_VERSION, "published_at": now}
     meta, deployments = _read_meta(ledger)
     events = _read_events(out / "events.jsonl")
-    provenance = {}
-    if (out / "provenance.json").exists():
-        try:
-            provenance = json.loads((out / "provenance.json").read_text())
-        except json.JSONDecodeError:
-            provenance = {}
+    provenance = _provenance(out)
     settings = provenance.get("settings") or {}
     last = events[-1] if events else None
     status = meta.get("status") or {}
     mode = meta.get("mode", "paper")
-    network = settings.get("network", "mainnet")
+    network = _network(provenance)
     feed = provenance.get("feed", "satrush-public-" + network)
     settled = [d for d in deployments if d["status"] == "SETTLED" and d["outcome"]]
     open_rows = [d for d in deployments if d["status"] in ("PAPER", "CONFIRMED", "SENT", "PREPARED", "UNKNOWN")]
     won = [d for d in settled if d["outcome"].get("won")]
     initial = D(meta.get("initial_cash") or "0")
-    cash = D(meta.get("cash") or "0") if mode == "paper" else D(last["equity_usdc"]) if last else initial
     in_play = sum((D(d["plan"]["stake_usd"]) for d in open_rows), D(0))
-    equity = (cash + in_play) if mode == "paper" else cash
+    if mode == "paper":
+        cash = D(meta.get("cash") or "0")
+        equity = cash + in_play
+    elif last:
+        # Live: the worker samples the wallet before it deploys, so the latest observation still holds the
+        # stake it then sent for that round. `available_usdc` (wallet + unclaimed USDC) is the cash figure;
+        # older workers only report `equity_usdc`, which also counts unclaimed sats at the BTC price.
+        just_sent = sum((D(d["plan"]["stake_usd"]) for d in open_rows if d["round_id"] == last.get("round_id")), D(0))
+        equity = D(last["equity_usdc"])
+        cash = max(D(last.get("available_usdc") or last["equity_usdc"]) - just_sent, D(0))
+    else:
+        cash = equity = initial
     pnl = equity - initial
     fees = sum((D(d["plan"]["stake_usd"]) - D(d["outcome"]["stake_usd"]) for d in settled if d["outcome"].get("stake_usd")), D(0))
     sats_total = sum(int(d["outcome"].get("sats") or 0) for d in settled)
@@ -203,7 +243,7 @@ def snapshot(out, now=None):
         "published_at": now,
         "wallet": {
             "address": meta.get("wallet"),
-            "explorer": f"https://solscan.io/account/{meta['wallet']}" if meta.get("wallet") else None,
+            "explorer": _explorer("account", meta["wallet"], network) if meta.get("wallet") else None,
         },
         "board": (last or {}).get("board"),
         "portfolio": {
@@ -243,7 +283,7 @@ def snapshot(out, now=None):
         "history": history,
         "last_outcomes": meta.get("last_outcomes") or [],
         "readout": provenance.get("readout"),
-        "model": MODEL,
+        "model": _model(provenance),
         "policy": "Fixed 21-group descending-neuron readout picks tiles; stake, limits and timing are engineered settings.",
         "animation": "Decorative 3D avatar; not a neural or muscle reconstruction",
         "learning_validated": False,
@@ -261,9 +301,11 @@ def audit(out):
     if not ledger.exists():
         return {"ready": False}
     meta, deployments = _read_meta(ledger)
+    provenance = _provenance(out)
+    network = _network(provenance)
     events = {e.get("round_id"): e for e in _read_events(out / "events.jsonl")}
     rows = []
-    for d in deployments:
+    for d in deployments[:AUDIT_LIMIT]:
         e = events.get(d["round_id"]) or {}
         n = e.get("neural") or {}
         rows.append(
@@ -275,7 +317,7 @@ def audit(out):
                 "selection_mask": d["plan"]["mask"],
                 "amount_micro_usdc": d["plan"]["amount"],
                 "signature": d["signature"],
-                "explorer": f"https://solscan.io/tx/{d['signature']}" if d["signature"] and d["status"] in ("CONFIRMED", "SETTLED") else None,
+                "explorer": _explorer("tx", d["signature"], network) if d["signature"] and d["status"] in SIGNED else None,
                 "outcome": d["outcome"],
                 "tick": e.get("tick"),
                 "input_sha256": n.get("input_sha256"),
@@ -289,12 +331,16 @@ def audit(out):
         "wallet": meta.get("wallet"),
         "program": PROGRAM,
         "provenance_sha256": meta.get("provenance_sha256"),
-        "model": MODEL,
+        "network": network,
+        "model": _model(provenance),
         "execution": "Paper: hypothetical deploys settled from real public round results"
         if meta.get("mode") == "paper"
         else "Live: DeployPublic transactions signed by the dedicated wallet",
         "deployments": rows,
-        "note": "This audit supports traceability, not proof of skill or independent verification by SatRush.",
+        "deployment_count": len(deployments),
+        "truncated": len(deployments) > len(rows),
+        "note": "This audit supports traceability, not proof of skill or independent verification by SatRush."
+        + (f" It lists the {AUDIT_LIMIT} most recent deploy intents; the worker's ledger holds all {len(deployments)}." if len(deployments) > len(rows) else ""),
     }
 
 
@@ -307,13 +353,17 @@ def write_files(out):
     audit_doc = audit(out)
     audit_bytes = json.dumps(audit_doc, allow_nan=False).encode()
     state["publication"]["audit_sha256"] = hashlib.sha256(audit_bytes).hexdigest()
+    frame = out / "latest-input.png"
+    frame_bytes = frame.read_bytes() if frame.exists() else None
+    if frame_bytes is not None:
+        # Hash the bytes that ship, so the SHA the page shows is the SHA of the frame it fetches.
+        state["publication"]["frame_sha256"] = hashlib.sha256(frame_bytes).hexdigest()
     files = {
         "state.json": (json.dumps(state, allow_nan=False).encode(), "application/json"),
         "audit.json": (audit_bytes, "application/json"),
     }
-    frame = out / "latest-input.png"
-    if frame.exists():
-        files["sensory.png"] = (frame.read_bytes(), "image/png")
+    if frame_bytes is not None:
+        files["sensory.png"] = (frame_bytes, "image/png")
     for name, (data, _) in files.items():
         tmp = target / (name + ".partial")
         tmp.write_bytes(data)
@@ -321,17 +371,34 @@ def write_files(out):
     return files
 
 
+class BlobError(RuntimeError):
+    """The Blob API refused a request; `code` is the HTTP status and the message carries its JSON body."""
+
+    def __init__(self, code, body):
+        super().__init__(f"Blob API {code}: {body}")
+        self.code = code
+
+
 class BlobPublisher:
-    """Uploads the snapshot files to Vercel Blob (public, fixed pathnames).
+    """Uploads the snapshot files to Vercel Blob (public store).
 
     Mirrors @vercel/blob's put(): PUT https://vercel.com/api/blob/?pathname=...
     with the read-write token. The store id is the third token segment.
+
+    `state.json` and `audit.json` keep fixed pathnames and are overwritten in
+    place (the edge caches them for BLOB_MAX_AGE, Vercel's minimum). The frame
+    goes to `frames/<sha256>.png`, immutable and content-addressed, so the
+    frame the site serves is always the one `state.publication.frame_sha256`
+    names. Unchanged files are not re-uploaded: every put() is a billable
+    "advanced operation".
     """
 
     API = "https://vercel.com/api/blob/"
     VERSION = "12"
+    ATTEMPTS = 3
+    RETRYABLE = (429, 500, 502, 503, 504)
 
-    def __init__(self, token, prefix="stonkfly", request=None):
+    def __init__(self, token, prefix="stonkfly", request=None, sleep=time.sleep, announce=None):
         if not token or not token.startswith("vercel_blob_rw_"):
             raise ValueError("BLOB_READ_WRITE_TOKEN must be a vercel_blob_rw_ token")
         parts = token.split("_")
@@ -341,35 +408,79 @@ class BlobPublisher:
         self.store_id = parts[3]
         self.prefix = prefix.strip("/")
         self.request = request or self._http
+        self.sleep = sleep
+        self.announce = (lambda line: print(line, flush=True)) if announce is None else announce
         self.urls = {}
+        self.uploaded = {}  # logical name -> sha256 of the bytes last uploaded
+        self.announced = False
+
+    @property
+    def base_url(self):
+        """What SNAPSHOT_BASE_URL should be set to (how @vercel/blob builds public URLs)."""
+        return f"https://{self.store_id}.public.blob.vercel-storage.com/{self.prefix}"
 
     @staticmethod
     def _http(url, data, headers):
         req = urllib.request.Request(url, data=data, headers=headers, method="PUT")
-        with urllib.request.urlopen(req, timeout=30) as response:
-            return json.loads(response.read())
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                return json.loads(response.read())
+        except urllib.error.HTTPError as e:
+            body = e.read(300).decode("utf-8", "replace")
+            raise BlobError(e.code, body) from e
 
-    def put(self, name, data, content_type):
+    def put(self, name, data, content_type, max_age=BLOB_MAX_AGE):
         pathname = f"{self.prefix}/{name}"
         url = self.API + "?" + urllib.parse.urlencode({"pathname": pathname})
         headers = {
             "authorization": f"Bearer {self.token}",
             "x-api-version": self.VERSION,
             "x-vercel-blob-store-id": self.store_id,
+            "x-api-blob-request-id": f"{self.store_id}:{int(time.time() * 1000)}:{secrets.token_hex(4)}",
             "x-vercel-blob-access": "public",
             "x-content-type": content_type,
             "x-add-random-suffix": "0",
             "x-allow-overwrite": "1",
-            "x-cache-control-max-age": "5",
+            "x-cache-control-max-age": str(max_age),
             "content-type": content_type,
         }
-        reply = self.request(url, data, headers)
+        for attempt in range(self.ATTEMPTS):
+            headers["x-api-blob-request-attempt"] = str(attempt)
+            try:
+                reply = self.request(url, data, headers)
+                break
+            except (BlobError, OSError) as e:  # OSError covers URLError and timeouts
+                retryable = e.code in self.RETRYABLE if isinstance(e, BlobError) else True
+                if not retryable or attempt == self.ATTEMPTS - 1:
+                    raise
+                self.sleep(0.5 * 2**attempt)
         self.urls[name] = reply.get("url")
         return reply
 
     def __call__(self, out):
-        for name, (data, content_type) in write_files(out).items():
-            self.put(name, data, content_type)
+        files = write_files(out)
+        try:
+            # Dependencies first: state.json names the frame and the audit hash, so both must exist before it lands.
+            for name in ("sensory.png", "audit.json", "state.json"):
+                if name not in files:
+                    continue
+                data, content_type = files[name]
+                sha = hashlib.sha256(data).hexdigest()
+                if self.uploaded.get(name) == sha:
+                    continue
+                if name == "sensory.png":
+                    self.put(f"frames/{sha}.png", data, content_type, max_age=FRAME_MAX_AGE)
+                    self.urls[name] = self.urls.pop(f"frames/{sha}.png")
+                else:
+                    self.put(name, data, content_type)
+                self.uploaded[name] = sha
+        except Exception as e:
+            # The loop keeps only the exception's class name; leave the detail (status, API body) in the log.
+            self.announce(json.dumps({"publish_error": f"{type(e).__name__}: {e}"[:300]}))
+            raise
+        if not self.announced and self.urls.get("state.json"):
+            self.announced = True
+            self.announce(json.dumps({"publish": {"base_url": self.urls["state.json"].rsplit("/", 1)[0], "env": "SNAPSHOT_BASE_URL"}}))
         return dict(self.urls)
 
 
