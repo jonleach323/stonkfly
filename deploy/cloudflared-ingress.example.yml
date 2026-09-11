@@ -1,0 +1,11 @@
+# Cloudflare Tunnel: add ONE ingress rule to your existing cloudflared config.yml, above the
+# catch-all `- service: http_status:404`. The watch page listens on 127.0.0.1:8787 on the host
+# (docker compose default), so the tunnel reaches it without opening any port.
+ingress:
+  # ... your existing subdomains ...
+  - hostname: fly.example.com
+    service: http://127.0.0.1:8787
+    originRequest:
+      noTLSVerify: false
+      connectTimeout: 10s
+  - service: http_status:404

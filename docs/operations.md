@@ -56,6 +56,15 @@ The page is at `http://127.0.0.1:8787/` on the host. Set `STONKFLY_WATCH_BIND=0.
 
 For live play, put the dedicated wallet's 64-byte array in `SATRUSH_KEYPAIR_JSON`, set `STONKFLY_MODE=live` and `STONKFLY_LIVE=I_ACCEPT_REAL_DEPLOYS`, then `docker compose up -d --force-recreate worker`. Run `docker compose run --rm worker run --live --preflight-only --network mainnet --out /runs/live` first to check balances without deploying.
 
+### Behind Cloudflare on a shared server
+
+If the server already serves other subdomains, do not use the `https` profile (it would take ports 80 and 443). Leave `STONKFLY_WATCH_BIND=127.0.0.1` and point your existing front door at `127.0.0.1:8787`:
+
+- **Cloudflare Tunnel (cloudflared):** add the ingress rule from `deploy/cloudflared-ingress.example.yml` for the new hostname to your tunnel's `config.yml`, then add the DNS route: `cloudflared tunnel route dns <tunnel> fly.example.com` and restart cloudflared.
+- **Proxied DNS + your own reverse proxy:** add an A/AAAA record for the subdomain in Cloudflare (proxied) and a server block like `deploy/nginx-watch.conf` (or the Caddy equivalent, `fly.example.com { reverse_proxy 127.0.0.1:8787 }`) that proxies to `127.0.0.1:8787`.
+
+Cloudflare's default cache does not store HTML or `/api/*` (the functions send `no-store` or `max-age=1`), so no page rule is needed. The page polls every two seconds; that is a few requests per viewer per second at most, well within the free plan.
+
 The dataset lives in the `data` volume (built once, about 1.6 GB) and run state in the `runs` volume; `docker compose down` keeps both, `docker compose down -v` deletes them. A halt (loss stop, unknown deploy outcome) exits the worker cleanly and it stays down until you review; see recovery below. `deploy/stonkfly-*.service` are systemd units for a bare-metal install with the same entrypoint.
 
 ## Watching a run
