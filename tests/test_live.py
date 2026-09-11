@@ -162,3 +162,25 @@ def test_shortfall_claims_unclaimed_usd_first(tmp_path):
         assert str(player.available(api.board())) == "5.2"
     finally:
         ledger.close()
+
+
+def test_keypair_from_env_or_file(tmp_path):
+    import json
+    import os
+
+    from stonkfly.satrush.wallet import load_keypair
+
+    keypair = Keypair()
+    raw = list(bytes(keypair))
+    assert load_keypair("missing.json", env={"SATRUSH_KEYPAIR_JSON": json.dumps(raw)}).pubkey() == keypair.pubkey()
+    with pytest.raises(ValueError):
+        load_keypair("missing.json", env={"SATRUSH_KEYPAIR_JSON": "[1,2,3]"})
+    path = tmp_path / "k.json"
+    path.write_text(json.dumps(raw))
+    os.chmod(path, 0o644)
+    with pytest.raises(PermissionError):
+        load_keypair(path, env={})
+    os.chmod(path, 0o600)
+    assert load_keypair(path, env={}).pubkey() == keypair.pubkey()
+    with pytest.raises(FileNotFoundError):
+        load_keypair(tmp_path / "none.json", env={})
