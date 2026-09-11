@@ -89,6 +89,8 @@ The dataset lives in the `data` volume (built once, about 1.6 GB) and run state 
 
 To stop: Ctrl-C, or `touch runs/live/STOP` (`runs/paper/STOP` for paper). An already sent transaction may still land; the next start reconciles it.
 
-For an ordinary clean restart, use the same command and run directory. After reviewing a transient failure, remove the STOP file if appropriate and pass `--resume-reviewed`. This cannot clear a loss stop, bypass an unresolved transaction, or accept changed source/configuration. Source changes require a fresh run directory or an explicitly reviewed migration.
+For an ordinary clean restart, use the same command and run directory. After reviewing a transient failure, remove the STOP file if appropriate and pass `--resume-reviewed`. This cannot clear a loss stop or bypass an unresolved transaction.
+
+Updating the code does not stop a run: the worker logs `source_changed` with the files that differ and appends them to the ledger's `source_history`, so the audit still shows which code played which rounds. What a run cannot resume with is a different protocol: settings (stake, network, neural timing), dataset, readout cells, circuit rule, mode or feed. Then it stops with "Run source/protocol changed"; start a fresh run directory (in Docker, `docker compose run --rm worker sh -c 'mv /runs/paper /runs/paper-$(date +%s)'` then `docker compose up -d worker`) or change the setting back.
 
 Runtime state, balances, wallet addresses, `.env` and keypair filenames are git-ignored. Keep custom key paths outside the repository. Tests use in-memory doubles and never sign or send real transactions.
