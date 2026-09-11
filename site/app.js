@@ -15,6 +15,11 @@ const moneyFmt = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maxi
 const moneyFmt4 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
+// Static demo: a captured snapshot embedded by site/tools/demo.py. The clock freezes at capture time,
+// polling stops after the first render, and the footer says so. Nothing here fetches or updates.
+const DEMO = typeof window !== "undefined" && window.__STONKFLY_DEMO && typeof window.__STONKFLY_DEMO === "object" ? window.__STONKFLY_DEMO : null;
+function nowMs() { return DEMO && num(DEMO.captured_at) !== null ? Number(DEMO.captured_at) * 1000 : Date.now(); }
+
 const app = {
   state: null, stateAt: 0, stateFails: 0, everFetched: false, lastError: "", stateSkew: 0,
   board: null, boardAt: 0, boardSkew: null, boardFails: 0,
@@ -56,7 +61,7 @@ function fmtSats(n, usd) {
   return `${intFmt.format(v)} SATS${u === null ? "" : ` (${fmtMoney(u)})`}`;
 }
 /** Wall time in Unix seconds on the server's clock: `publication.served_at` corrects this browser's clock. */
-function nowS() { return Date.now() / 1000 - app.stateSkew; }
+function nowS() { return nowMs() / 1000 - app.stateSkew; }
 // UTC throughout (the daily deploy limit is a UTC day); a date is added once a stamp is older than a day.
 function fmtTime(t) {
   const v = num(t);
@@ -142,6 +147,11 @@ function tileList(tiles) {
 /* ---------------- fetching ---------------- */
 
 async function getJSON(url) {
+  if (DEMO) {
+    if (url.startsWith("/api/state")) return { ok: true, status: 200, body: DEMO.state || null };
+    if (url.startsWith("/api/board")) return { ok: !!DEMO.board, status: DEMO.board ? 200 : 503, body: DEMO.board || null };
+    return { ok: false, status: 404, body: null };
+  }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -158,6 +168,7 @@ async function getJSON(url) {
 
 function schedule(name, fn, ms) {
   clearTimeout(app.timers[name]);
+  if (DEMO) return; // one render of the captured snapshot, then nothing moves
   app.timers[name] = setTimeout(fn, ms);
 }
 function pollDelay() { return document.hidden ? POLL_HIDDEN_MS : POLL_MS; }
@@ -172,11 +183,11 @@ async function pollState() {
   if (r.ok && b && !hostingError) {
     const wasReady = !!(app.state && app.state.ready);
     app.state = b;
-    app.stateAt = Date.now();
+    app.stateAt = nowMs();
     app.stateFails = 0;
     app.lastError = "";
     const served = num(b.publication && b.publication.served_at);
-    if (served !== null) app.stateSkew = Date.now() / 1000 - served;
+    if (served !== null) app.stateSkew = nowMs() / 1000 - served;
     if (wasReady && !b.ready) safe(resetReady);
   } else {
     app.stateFails += 1;
@@ -197,13 +208,13 @@ async function pollBoard() {
   const b = r.body;
   if (r.ok && b && b.live === true && Array.isArray(b.tile_stakes)) {
     app.board = b;
-    app.boardAt = Date.now();
+    app.boardAt = nowMs();
     app.boardFails = 0;
     const fetched = num(b.fetched_at);
     // Countdown runs on the server's clock. `now - fetched_at` overstates the skew by the response's age
     // (proxy memo, CDN, latency), so keep the smallest lag seen; a jump of 30 s means a clock changed.
     if (fetched !== null) {
-      const lag = Date.now() / 1000 - fetched;
+      const lag = nowMs() / 1000 - fetched;
       if (app.boardSkew === null || lag < app.boardSkew || lag - app.boardSkew > 30) app.boardSkew = lag;
     }
   } else {
@@ -218,7 +229,7 @@ async function pollBoard() {
 /** Which board to draw: the live proxy when fresh, else the retina's snapshot, else a stale live board. */
 function currentBoard() {
   const s = app.state;
-  const liveFresh = app.board && Date.now() - app.boardAt < LIVE_BOARD_MAX_AGE_MS;
+  const liveFresh = app.board && nowMs() - app.boardAt < LIVE_BOARD_MAX_AGE_MS;
   if (liveFresh) return { board: app.board, source: "live" };
   if (s && s.ready && s.board && Array.isArray(s.board.tile_stakes)) return { board: s.board, source: "snapshot" };
   if (app.board) return { board: app.board, source: "stale" };
@@ -596,7 +607,7 @@ function renderSensory(s) {
   const sha = pub.frame_sha256 || null;
   if (img && sha && sha !== app.frameSha) {
     app.frameSha = sha;
-    img.src = `/api/sensory.png?v=${encodeURIComponent(sha.slice(0, 16))}`;
+    img.src = DEMO && DEMO.sensory ? DEMO.sensory : `/api/sensory.png?v=${encodeURIComponent(sha.slice(0, 16))}`;
     img.hidden = false;
     const empty = $("sensory-empty");
     if (empty) empty.hidden = true;
@@ -694,7 +705,7 @@ function tick() {
     const b = cb.board;
     if (b.pending_activation) { text = "ROTATING"; frac = 1; cls = "rotating"; }
     else {
-      const now = Date.now() / 1000 - (cb.source === "snapshot" ? app.stateSkew : (app.boardSkew ?? app.stateSkew));
+      const now = nowMs() / 1000 - (cb.source === "snapshot" ? app.stateSkew : (app.boardSkew ?? app.stateSkew));
       const endsAt = num(b.ends_at), startedAt = num(b.started_at), slotMs = num(b.slot_ms) || 316, slotsLeft = num(b.slots_remaining), fetchedAt = num(b.fetched_at);
       let remaining = null;
       if (endsAt !== null) remaining = endsAt - now;
@@ -736,7 +747,7 @@ function renderFooter() {
     else if (health === "halted") { chip = "WORKER HALTED"; tone = "bad"; }
     else if (health === "stale") { chip = "STALE"; tone = ""; }
     else if (s.mode === "live") { chip = "LIVE WALLET"; tone = "ok"; }
-    else if (app.board && Date.now() - app.boardAt < LIVE_BOARD_MAX_AGE_MS && st.feed !== "fixture") { chip = "PAPER · LIVE BOARD"; tone = "info"; }
+    else if (app.board && nowMs() - app.boardAt < LIVE_BOARD_MAX_AGE_MS && st.feed !== "fixture") { chip = "PAPER · LIVE BOARD"; tone = "info"; }
     else { chip = "PAPER SIMULATION"; tone = "info"; }
     const phase = String(st.phase || "stopped").toUpperCase();
     fresh = health === "disconnected"
@@ -748,6 +759,10 @@ function renderFooter() {
     else exec = "PAPER SIMULATION · NO WALLET";
     if (st.stub_brain) exec += " · STUB BRAIN";
     if (s.network === "devnet") exec += " · DEVNET";
+  }
+  if (DEMO) {
+    chip = "STATIC DEMO"; tone = "info";
+    fresh = `SNAPSHOT CAPTURED ${fmtTime(DEMO.captured_at)} UTC · NOTHING ON THIS PAGE UPDATES`;
   }
   setChip("conn-chip", chip, tone);
   setText("foot-fresh", fresh);
