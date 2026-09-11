@@ -71,5 +71,6 @@ def test_closing_round_is_skipped(world):
     clock.now = 1_000.0 + 58.0  # 6-7 slots left of 200
     assert loop.step() is None
     assert ledger.deployment(1000) is None
-    assert clock.now > 1_060.0  # waited for the next round
+    assert clock.now == pytest.approx(1_063.0)  # brief poll, not a full-round wait
     assert loop.step() is not None and ledger.deployment(1001)["status"] == "PAPER"
+    assert clock.now > 1_120.0  # after deploying, waited for that round to end

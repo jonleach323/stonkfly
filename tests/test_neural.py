@@ -1,4 +1,6 @@
+import json
 import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -37,14 +39,16 @@ def test_full_graph_sensory_reinforcement_checkpoint(tmp_path):
     from stonkfly.data import verify
     from stonkfly.display import board_frame
     from stonkfly.neural.controller import FlyController
-    from stonkfly.satrush.api import FixtureApi
+    from stonkfly.satrush.api import parse_board
 
     assert verify()["neurons"] == 166700
     c = FlyController(Settings())
     assert len(c.brain.post) == 25582938 and len(c.brain.circuit["edges"]) == 7835
     assert len(c.brain.retina) == 3335 and len(c.brain.r8) == 811
     assert sum(c.readout.report["group_sizes"]) == c.readout.report["cells"]
-    frame = board_frame(FixtureApi(period=60, clock=lambda: 0.0).board(), now=0.0)
+    # A real public board: uniform synthetic boards barely activate KCs.
+    board = parse_board(json.loads((Path(__file__).parent / "fixtures/board.json").read_text())["data"], fetched_at=0.0)
+    frame = board_frame(board, now=0.0)
     for _ in range(3):
         out = c.observe(frame, "none")
     assert 1 <= len(out["tiles"]) <= 21

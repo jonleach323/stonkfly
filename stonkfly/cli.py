@@ -139,6 +139,7 @@ def main():
             if hashlib.sha256(path.read_bytes()).hexdigest() != cp["sha256"]:
                 raise RuntimeError("Checkpoint integrity mismatch")
             controller.restore(path)
+            controller.readout.load((ledger.get("observation") or {}).get("readout_state"))
         provenance = {
             "settings": dataclasses.asdict(settings),
             "dataset": verified,

@@ -35,8 +35,10 @@ def board_frame(board, now=None):
     for i in range(TILES):
         x0, y0, x1, y1 = tile_box(i)
         share = stakes[i] / top
-        # Heavier stake = deeper blue. Light background keeps photoreceptor drive.
-        fill = (int(225 - 150 * share), int(232 - 110 * share), int(248 - 40 * share))
+        # Heavier stake = deeper orange. Of four palettes probed on the full
+        # graph, this warm one drove Kenyon cells on every board tried; blue
+        # shades flipped the network between silent and active regimes.
+        fill = (int(250 - 30 * share), int(240 - 120 * share), int(225 - 150 * share))
         d.rectangle((x0, y0, x1, y1), fill=fill, outline=(120, 135, 170))
         if i + 1 in recent:
             rank = recent[i + 1]

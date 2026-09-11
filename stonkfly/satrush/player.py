@@ -46,7 +46,8 @@ class PaperPlayer:
         self.api = api
         # The public config omits one fee component; a settled round shows the real total.
         configured = round_fee_bps(api.config())
-        self.fee_bps = observed_fee_bps(api.board().previous_round or {}, configured)
+        previous = (api.board().previous_round or {}).get("id")
+        self.fee_bps = observed_fee_bps(api.round(previous) if previous else {}, configured)
 
     def preflight(self):
         return {"mode": self.mode, "cash": str(self.l.cash), "fee_bps": self.fee_bps}

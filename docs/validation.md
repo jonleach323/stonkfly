@@ -1,8 +1,8 @@
 # Validation status
 
-Recorded during implementation on 2026-09-11. All transaction tests use an in-memory RPC double; **no real deploys or funded-wallet checks were performed**. The full-connectome test was not run in this environment (no dataset); the readout and controller changes were exercised with the stub brain only.
+Recorded during implementation on 2026-09-11. All transaction tests use an in-memory RPC double; **no real deploys or funded-wallet checks were performed**.
 
-Final local result: **44 tests passed, 1 skipped** (the opt-in full-connectome test).
+Final local result: **46 tests passed**, plus the opt-in full-connectome test on the freshly prepared MaleCNS graph.
 
 | Check | Observed result | What it does not establish |
 | --- | --- | --- |
@@ -10,7 +10,9 @@ Final local result: **44 tests passed, 1 skipped** (the opt-in full-connectome t
 | Settlement arithmetic | Fee, per-tile refund and pro-rata BTC share reproduce every deployment in a real settled round exactly (`tests/fixtures/round-55575.json`) | The value of RUSH tokens or hashrate, or the BTC conversion price of future rounds |
 | Execution/unit tests | Stake and capital bounds, stale board, closing round, one intent per round, STOP file, loss stop, rejected transaction, unknown outcome halt and reconciliation, claim-before-deploy on shortfall | Successful execution against a live wallet or under mainnet congestion |
 | Paper loop | Synthetic rounds with a seeded stub brain: one deploy per round, settlement credited, reinforcement scheduled for the next observation, checkpoints written | Anything about neural behavior |
-| Two paper observations of the real public board with the stub brain | Two deploys simulated against real rounds; one real round result settled the first deploy; the round fee and winning-tile stake came from public round data | A real game return; the stub brain is seeded noise, not neural output |
+| Full-network sensory/feedback test on a real board frame | The frame drives Kenyon cells; reward and aversive pulses spike the identified DAN cells; eligible synapses change; reward differs from an unpaired control; frozen memory stays unchanged; checkpoints restore | Accurate fly vision or an acquired association |
+| Palette probe | Blue tile ramps gave about 10 KC spikes on some boards and about 4,500 on others; the warm ramp gave 2,300-4,400 on all four boards probed | That the active regime is the biologically right one |
+| Real-brain paper play against the live board | Consecutive real rounds observed, tiles chosen by the DN readout, deploys simulated and settled from real results, aversive pulses delivered on losses, 5 s per observation | A real game return; an edge of any kind |
 
 Before any live use, the operator should run `python -m stonkfly run --live --preflight-only` and then a single-step live run with the minimum stake, and inspect the transaction on an explorer. The on-chain program can change; PDAs and discriminators would then need re-verification against `satrush.io`'s client.
 

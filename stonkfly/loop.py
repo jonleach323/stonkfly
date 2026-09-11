@@ -36,7 +36,9 @@ class GameLoop:
 
     def wait_for_next_round(self, board):
         remaining = board.seconds_remaining(self.clock())
-        until = self.clock() + max(min(remaining or 0, 120), 0) + self.settle_margin
+        if board.pending_activation or remaining is None or remaining > 300:
+            remaining = 5.0
+        until = self.clock() + max(remaining, 0) + self.settle_margin
         while self.clock() < until and not (self.out / "STOP").exists():
             self.sleep(min(1.0, max(until - self.clock(), 0.05)))
 
@@ -60,8 +62,12 @@ class GameLoop:
             self.wait_for_next_round(board)
             return None
         reason = self.guard.playable(board)
-        if reason:
+        if reason == "Already deployed this round":
             self.wait_for_next_round(board)
+            return None
+        if reason:
+            # Pending activation, closing round or a settling round: poll briefly.
+            self.sleep(5.0)
             return None
         kind = self.l.get("stimulus") or "none"
         frame = board_frame(board, now)
@@ -71,7 +77,13 @@ class GameLoop:
         checkpoint = self.out / f"brain-{slot}.npz"
         self.controller.save(checkpoint)
         info = {"file": checkpoint.name, "sha256": hashlib.sha256(checkpoint.read_bytes()).hexdigest()}
-        observation = {"neural": neural, "round_id": board.round_id, "stimulus": kind, "outcomes": outcomes}
+        observation = {
+            "neural": neural,
+            "round_id": board.round_id,
+            "stimulus": kind,
+            "outcomes": outcomes,
+            "readout_state": self.controller.readout.state(),
+        }
         self.l.commit_tick(equity, info, observation)
         execution = {"status": "VETO", "reason": "unset"}
         try:

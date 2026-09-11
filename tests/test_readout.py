@@ -21,12 +21,32 @@ def test_median_rule_and_bounds():
     counts[60:63] = 4  # group 21
     out = r.decode(counts, 0.5)
     assert out["tiles"] == [1, 21] and out["group_hz"][0] == 20.0
+    r, _ = readout()
     assert r.decode(np.zeros(63, dtype=np.int32), 0.5)["tiles"] == [1]  # argmax always
     r2, _ = readout(min_tiles=3, max_tiles=5)
     assert r2.decode(np.zeros(63, dtype=np.int32), 0.5)["tiles"] == [1, 2, 3]
     counts = np.arange(63, dtype=np.int32)
     assert len(r2.decode(counts, 0.5)["tiles"]) == 5
     assert r.identities["1"] == ["100", "101", "102"]
+
+
+def test_adaptation_removes_a_constant_bias():
+    r, _ = readout(adaptation=2)
+    biased = np.zeros(63, dtype=np.int32)
+    biased[0:3] = 10  # group 1 always loud
+    first = r.decode(biased, 0.5)
+    assert first["tiles"] == [1]
+    for _ in range(5):
+        r.decode(biased, 0.5)
+    biased[30:33] = 1  # group 11 becomes slightly more active than usual
+    out = r.decode(biased, 0.5)
+    assert out["tiles"] == [11] and out["excess_hz"][0] == pytest.approx(0, abs=1e-6)
+    state = r.state()
+    fresh, _ = readout(adaptation=2)
+    fresh.load(state)
+    assert np.allclose(fresh.baseline, r.baseline)
+    with pytest.raises(ValueError):
+        fresh.load([1.0])
 
 
 def test_readout_needs_descending_neurons():

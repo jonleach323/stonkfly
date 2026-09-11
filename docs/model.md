@@ -20,19 +20,19 @@ Every round the public SatRush board is rendered locally as a fixed 320×180 ima
 
 3,335 mapped R1–R6 cells receive linear-sRGB luminance; 811 mapped R8 cells receive blue/green proxies. Sample locations are inferred from contacts with column-annotated visual cells, using overlapping left/right viewports. Unmapped receptors get no invented optical input. Photoreceptors and lamina are graded in real flies; using spikes, RGB channels, saturating current and a 12 mV-equivalent lamina bias is an explicit display adapter, not validated retinal physiology.
 
-Existing R8→aMe12 connections use a net excitatory sign motivated by [Xiao et al., 2023](https://doi.org/10.1038/s41586-023-06681-6); transferring that result to these reconstructed cells and contact-count magnitudes remains an assumption. The light background was kept from the earlier trading display because a dark chart barely activated KCs. Display sensitivity is a major confound to test.
+Existing R8→aMe12 connections use a net excitatory sign motivated by [Xiao et al., 2023](https://doi.org/10.1038/s41586-023-06681-6); transferring that result to these reconstructed cells and contact-count magnitudes remains an assumption. Tile shading is a warm orange ramp on a light background. On the full graph, Kenyon-cell activity proved knife-edge sensitive to the palette: blue ramps left the network in a near-silent regime (about 10 KC spikes per observation) on some real boards and an active one (about 4,500) on others; the warm ramp drove the active regime on every board probed. That choice was made on KC activity alone, never on game outcomes. Display sensitivity remains a major confound.
 
-By default each round advances **500 ms of neural time**, regardless of the roughly 63 s round. That is a deliberately compressed game-to-neural clock, not real-time fly physiology. Eligibility and decay operate in neural seconds.
+By default each round advances **500 ms of neural time** (about 5 s of wall time on four cores), regardless of the roughly 63 s round. That is a deliberately compressed game-to-neural clock, not real-time fly physiology. Eligibility and decay operate in neural seconds.
 
 ## How neural spikes become a tile choice
 
-Every neuron whose annotated cell type starts with `DN` (descending neurons) is sorted by body ID and cut into 21 contiguous groups, one per tile. Over each observation:
+Every neuron whose annotated cell type starts with `DN` (descending neurons; 1,342 cells in this graph) is sorted by body ID and cut into 21 contiguous groups, one per tile. Each group keeps an exponential moving average of its own rate over about 20 observations, a stand-in for adaptation; without it the lowest-ID group fired at 36 Hz on every board and the same ten tiles were chosen every round. Over each observation:
 
 | Neural measurement | Proposal |
 | --- | --- |
-| Group mean rate above the median of the 21 group rates | Tile selected |
-| Most active group | Always selected |
-| Selection outside the configured tile-count bounds | Trimmed or extended by rate rank |
+| Group rate minus its own running average, above the median of those excesses | Tile selected |
+| Largest excess | Always selected |
+| Selection outside the configured tile-count bounds | Trimmed or extended by excess rank |
 
 The stake per round is a fixed setting, not a neural quantity. The mapping is arbitrary and pre-registered; the cell identities of every group are written to `provenance.json`. This is an engineered interface, not a discovery of "tile neurons". Persistent network bias becomes persistent tile preference; do not interpret that as insight into a random draw.
 
