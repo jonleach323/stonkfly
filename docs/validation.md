@@ -1,22 +1,18 @@
 # Validation status
 
-Recorded during implementation on 2026-09-09. All exchange-order tests use an in-memory SDK double; **no real orders or funded-account checks were performed**.
+Recorded during implementation on 2026-09-11. All transaction tests use an in-memory RPC double; **no real deploys or funded-wallet checks were performed**. The full-connectome test was not run in this environment (no dataset); the readout and controller changes were exercised with the stub brain only.
 
-Final local result: **42 tests passed**, including the opt-in full-connectome test. An offline fixture run also resumed from its saved ledger/checkpoint with balances and neural time preserved. Four upstream AgentKit/Pydantic deprecation warnings remain; they did not fail the tests.
+Final local result: **44 tests passed, 1 skipped** (the opt-in full-connectome test).
 
 | Check | Observed result | What it does not establish |
 | --- | --- | --- |
-| Rebuild from checksum-verified released files | 166,700 neurons, 25,582,938 connections and 124,177,617 contacts; every compiled array matches its lock | Completeness or physiological accuracy of the reconstruction |
-| Execution/unit tests | Budget, stale data, spread, inventory, permissions, preview fees, STOP, cooldown, duplicate settlement, unknown submission and read-only public-client isolation pass | Successful execution against a particular live account, region or fee tier |
-| Full-network sensory/feedback test | White RGB input activates KCs; reward and aversive pulses cause spikes in identified DAN cells; eligible synapses change | Accurate fly retinal responses or an acquired trading association |
-| Same-checkpoint controls | Reward changes weights differently from no external reward; frozen memory stays exactly unchanged; checkpoint restoration works | Improved decisions, retention of a useful strategy, or conditioning equivalent to a biological experiment |
-| Six accelerated observations of actual Coinbase public BTC-USDC data | One neural BUY filled in paper mode; five subsequent BUY proposals vetoed by cooldown | A realistic trading return or unbiased strategy |
+| Program-derived addresses | Board, config, round, deployment, sats-vault and token-vault PDAs equal the addresses published by the SatRush API; the on-chain board, config, miner and round accounts decode with the expected field values | That the program's instruction semantics match the reconstructed client in every case |
+| Settlement arithmetic | Fee, per-tile refund and pro-rata BTC share reproduce every deployment in a real settled round exactly (`tests/fixtures/round-55575.json`) | The value of RUSH tokens or hashrate, or the BTC conversion price of future rounds |
+| Execution/unit tests | Stake and capital bounds, stale board, closing round, one intent per round, STOP file, loss stop, rejected transaction, unknown outcome halt and reconciliation, claim-before-deploy on shortfall | Successful execution against a live wallet or under mainnet congestion |
+| Paper loop | Synthetic rounds with a seeded stub brain: one deploy per round, settlement credited, reinforcement scheduled for the next observation, checkpoints written | Anything about neural behavior |
+| Two paper observations of the real public board with the stub brain | Two deploys simulated against real rounds; one real round result settled the first deploy; the round fee and winning-tile stake came from public round data | A real game return; the stub brain is seeded noise, not neural output |
 
-In that six-observation run, the first paper fill used 9.754680320 USDC plus 0.058528081920 USDC in modeled fees. The next observation scheduled a **200 ms aversive pulse**, with **55 spikes across the two PPL101 cells**. KCs produced 11–16 spikes per observation; five candidate edges differed from baseline. Those five edges had already changed before the external loss pulse: endogenous dopamine activity can also drive the rule. Do not attribute every weight change to P&L.
-
-The repeated BUY proposals are an important limitation. A fixed directional decoder can turn circuit bias into one-sided exposure. This run demonstrated neither successful learning nor a profitable policy. White-field neural tests activate substantially more KCs than the actual chart, so visual representation remains a major open modeling question.
-
-The former dark chart produced no KC spikes in an early three-step probe. A light-background display restored some activity without altering the neural parameters. That is a disclosed sensory-adapter change, not evidence that we found biologically correct vision.
+Before any live use, the operator should run `python -m stonkfly run --live --preflight-only` and then a single-step live run with the minimum stake, and inspect the transaction on an explorer. The on-chain program can change; PDAs and discriminators would then need re-verification against `satrush.io`'s client.
 
 ## Reproduce
 
@@ -24,10 +20,10 @@ The former dark chart produced no KC spikes in an early three-step probe. A ligh
 python -m pytest -q
 OPENBLAS_NUM_THREADS=1 STONKFLY_FULL_TEST=1 python -m pytest -q
 python -m stonkfly verify
-python -m stonkfly run --fixture --fast --steps 6 --out runs/check-fixture
-python -m stonkfly run --fast --steps 6 --out runs/check-public
+python -m stonkfly run --fixture --stub-brain --steps 6 --out runs/check-fixture
+python -m stonkfly run --stub-brain --steps 3 --out runs/check-public
 ```
 
-The last command reads current public prices and simulates fills. Prices, signals and paper outcomes will differ. All runtime evidence stays local in `runs/`; it is not uploaded with this report. A normal `run` omits `--fast` and samples at the configured wall interval.
+The last command reads the current public board and simulates deploys. Rounds, results and paper outcomes will differ. All runtime evidence stays local in `runs/`; it is not uploaded with this report.
 
-Before claiming learned performance, implement the held-out replay, shuffled reinforcement, exposure baselines, retention and memory-reset comparisons described in [the model](model.md). This repository currently provides a functioning experimental loop, not that empirical result.
+Before claiming learned behavior, implement the frozen-weight and shuffled-reinforcement controls, independent starts and memory-reset comparisons described in [the model](model.md). Because the draw is random and the fees are fixed, the only honest performance baseline is the expected loss of the same stake and tile counts placed uniformly at random.

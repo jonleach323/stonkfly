@@ -1,55 +1,52 @@
 # Running and stopping Stonkfly
 
-Use a dedicated account portfolio. Stonkfly is an experiment capable of losing its entire allocated balance. The funding cap is **100 USDC at initialization**, not an assertion that USDC always equals one dollar.
+Use a dedicated wallet. Stonkfly is an experiment capable of losing its entire allocated balance, and the game's fees make that the expected outcome over time. The funding cap is **100 USDC at initialization**.
 
 ## Installation and data
 
-Use Python 3.11 and a C++17 compiler (`clang++`/`c++` on macOS, GCC or Clang on Linux). `python -m stonkfly prepare` downloads about 1.1 GB of upstream data, verifies it, and builds the full graph. Allow several additional GB for dependencies, derived data and two checkpoints. `python -m stonkfly verify` independently checks prepared inputs. Set `STONKFLY_DATA` to use another data location.
+Use Python 3.11 and a C++17 compiler (`clang++`/`c++` on macOS, GCC or Clang on Linux). `python -m stonkfly prepare` downloads about 1.1 GB of upstream data, verifies it, and builds the full graph. `python -m stonkfly verify` independently checks prepared inputs. Set `STONKFLY_DATA` to use another data location.
 
-Existing DOOMFLY researchers can reuse verified local files with `python -m stonkfly prepare --reuse-doomfly /path/to/working-copy`. Stonkfly copies only the three required data artifacts, then checks the same locks. It does not import a Doom environment, run its website, or depend on that checkout afterward.
+Existing DOOMFLY researchers can reuse verified local files with `python -m stonkfly prepare --reuse-doomfly /path/to/working-copy`.
 
 ## Paper modes
 
 ```sh
-# Real public prices; simulated fills and 0.6% fee per side.
+# Real public board and real round results; simulated deploys.
 python -m stonkfly run --steps 10
 
-# Explicit synthetic offline market, accelerated development run.
-python -m stonkfly run --fixture --fast --steps 10 --out runs/fixture
+# Synthetic offline rounds and a seeded random "brain": plumbing check only.
+python -m stonkfly run --fixture --stub-brain --steps 10 --out runs/fixture
 
 # Frozen-memory control, always in a separate run directory.
-python -m stonkfly run --fixture --fast --frozen --steps 10 --out runs/frozen
+python -m stonkfly run --frozen --steps 10 --out runs/frozen
 ```
 
-`--fast` skips wall waits only in paper mode. It preserves the 0.1 ms neural timestep and the real 60-second execution cooldown, so an accelerated probe can have many rejected trades. This is a plumbing/neural test, not a backtest of achievable market returns. Paper fills use observed bid/ask plus the configured fee; they do not simulate depth, queue position or all market impact. `--fixture` never claims real market data.
+`--fixture` never claims real game data. `--stub-brain` is seeded noise, never neural output; both are refused with `--live`. Each observation advances the configured neural time and then waits for the current round to end.
 
-## Coinbase setup, performed by you
+## Wallet setup, performed by you
 
-1. Create a separate Coinbase Advanced portfolio and put up to 100 USDC in it. Start without other assets or open orders. Do not mix other bots, manual trades or deposits into that portfolio while Stonkfly runs.
-2. Create a [Coinbase App API key](https://docs.cdp.coinbase.com/coinbase-app/authentication-authorization/api-key-authentication) with ECDSA, **View and Trade**, **Transfer disabled**, scoped only to that portfolio. The program checks permissions and portfolio scope; an account-wide key is rejected.
-3. Save the downloaded key JSON locally as `coinbase-key.json` and restrict its file permissions (`chmod 600 coinbase-key.json`). It typically contains `name` and `privateKey`. Never paste the key into a commit or README.
-4. Copy `.env.example` to `.env`, set the key path and `COINBASE_PORTFOLIO_ID`, then set `STONKFLY_LIVE=I_ACCEPT_REAL_TRADES`. The CLI also requires `--live`; paper mode never submits an order even if the environment variable is present.
-5. Run `python -m stonkfly run --live --preflight-only`. This reads permissions, account balances and order state, and initializes the local ledger. **It does not submit orders.** Once you have reviewed the configuration, run `python -m stonkfly run --live` yourself.
+1. Create a new Solana keypair (`solana-keygen new -o satrush-keypair.json`, then `chmod 600`). Fund it with **at most 100 USDC** (mainnet mint `EPjF...Dt1v`) and about 0.02 SOL for fees. Do not use a wallet holding anything else.
+2. Copy `.env.example` to `.env`, set `SATRUSH_KEYPAIR`, and set `STONKFLY_LIVE=I_ACCEPT_REAL_DEPLOYS`. The CLI also requires `--live`; paper mode never signs a transaction even if the variable is present.
+3. Run `python -m stonkfly run --live --preflight-only`. This reads the on-chain config, your SOL and USDC balances and your miner account, and initializes the local ledger. **It does not deploy.** The preflight refuses wallets holding more than 100 USDC (including unclaimed game balance) or less than 0.005 SOL.
+4. Once you have reviewed the output, run `python -m stonkfly run --live` yourself. `--stake` (1-10 USDC), `--loss-stop`, `--daily-deploys` and `--priority-fee` adjust the limits within their bounds.
+5. `python -m stonkfly claim` moves settled USDC and sats shares from the game to the wallet. Claiming sats pays the vault's 10% exit fee. Winnings left unclaimed also fund later deploys.
 
-The key must be allowed to trade the requested pairs in your region. Defaults use BTC-USDC; ETH-USDC and SOL-USDC are optional via `--products`. Only available spot products pass checks. Coinbase preview warnings, unsupported order types or insufficient fee coverage stop the order; there is no fallback to an unbounded market order.
+Devnet (`--network devnet`) uses the game's devnet API, RPC and mints. Devnet USDC comes from the SatRush team's mint authority, not a public faucet.
 
 ## Execution guarantees and limits
 
-- Maximum initial funding: 100 USDC. Maximum buy commitment: 10 USDC including a 2% fee reserve. Sell quantity is capped by owned inventory and 10 USDC observed notional; a better execution price can yield slightly more proceeds. No borrowing, shorting, transfers or leverage actions are exposed.
-- At most 24 order attempts per UTC day and at least 60 seconds between attempts. Rejected previews count. Failed orders do not become new strategy choices.
-- Price-bounded fill-or-kill orders use at most 0.5% slippage and 0.5% spread. Quotes must be no older than 15 seconds. A fresh book is fetched after neural integration; a move beyond the observation tolerance vetoes the trade. Preview fees, account balances and the STOP condition are checked before submission.
-- At 20 USDC drawdown from starting equity, **stop new orders**. This is not a liquidation order or guaranteed maximum loss. Existing holdings remain exposed; price moves between observations can exceed the threshold. Decide separately how you want to manage those holdings.
-- SQLite records a unique client order ID before submission. An uncertain response stays unresolved; the worker searches the exchange for that same ID instead of sending a new order. Missing/ambiguous results stop the worker for manual review. Final fills and fees settle exactly once. Unexpected actual fees are booked, then further orders halt.
-- The local process lock prevents two workers using one run directory. It does not coordinate multiple computers or copied ledgers. Run one worker for the dedicated portfolio, and do not delete the live ledger to bypass checks.
+- Maximum initial funding: 100 USDC. Stake per round: 1-10 USDC, fixed for the run. At most 1,440 deploys per UTC day (default 300) and one deploy per round. No automation escrow, vault tickets, leverage or transfers are exposed.
+- A round is only played when it is active, not pending activation, and at least 40 slots (about 13 s) remain. The board is re-read after neural integration; a changed or closing round vetoes the deploy.
+- At 20 USDC drawdown from starting equity (wallet USDC plus unclaimed USDC plus the value of unclaimed sats), **stop new deploys**. A round already deployed still settles.
+- The ledger records the signed transaction signature before sending. An unconfirmed submission halts the worker; on restart, `reconcile` checks the signature and the deployment account before anything else. A rejected or expired transaction frees the round. A still-unknown outcome older than five minutes with no on-chain deployment is treated as failed; anything else stays halted for review.
+- The local process lock prevents two workers using one run directory. It does not coordinate multiple machines or copied ledgers.
 
 ## State, recovery and privacy
 
-The worker must stay running on your computer/server. It is not a hosted service. Prevent laptop sleep if you want uninterrupted observations. Closing it preserves committed neural state and memory.
+`runs/<name>/` holds a SQLite ledger, two alternating checkpoints, `events.jsonl`, `latest.json`, `latest-input.png`, and provenance with exact code, graph, readout-cell and parameter hashes. Each deploy intent binds to the preceding neural observation and checkpoint.
 
-`runs/<name>/` holds a SQLite ledger, two alternating checkpoints, `events.jsonl`, `latest.json`, `latest-input.png`, and provenance with exact code, graph, stimulus and parameter hashes. Each intent binds to the preceding neural observation and checkpoint. The ledger is authoritative if a crash occurs before the human-readable log is written.
+To stop: Ctrl-C, or `touch runs/live/STOP` (`runs/paper/STOP` for paper). An already sent transaction may still land; the next start reconciles it.
 
-To stop: Ctrl-C, or `touch runs/live/STOP` (`runs/paper/STOP` for paper). This stops future decisions/submissions; an already submitted FOK order may still finish. Inspect any uncertain order in Coinbase before taking another action.
+For an ordinary clean restart, use the same command and run directory. After reviewing a transient failure, remove the STOP file if appropriate and pass `--resume-reviewed`. This cannot clear a loss stop, bypass an unresolved transaction, or accept changed source/configuration. Source changes require a fresh run directory or an explicitly reviewed migration.
 
-For an ordinary clean restart, use the same command and run directory. After reviewing a transient failure and reconciling account state, remove the STOP file if appropriate and pass `--resume-reviewed`. This cannot clear a drawdown or fee-overrun stop, bypass unresolved exchange outcomes, or accept changed source/configuration. A missing unknown order requires manual exchange investigation; do not assume it failed. Source changes require an explicitly reviewed state migration; use a fresh **paper** directory for development.
-
-All runtime state, balances, account IDs, data, `.env` and the default key filenames are git-ignored. Keep custom key paths outside the repository. Tests use doubles and never submit real orders. No live account credentials or real balances are bundled.
+Runtime state, balances, wallet addresses, `.env` and keypair filenames are git-ignored. Keep custom key paths outside the repository. Tests use in-memory doubles and never sign or send real transactions.

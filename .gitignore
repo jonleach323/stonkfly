@@ -18,6 +18,7 @@ __pycache__/
 dist/
 build/
 .DS_Store
-coinbase-key.json
-cdp_api_key.json
+satrush-keypair.json
+*keypair*.json
+id.json
 *.partial
