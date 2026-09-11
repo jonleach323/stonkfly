@@ -98,10 +98,21 @@ class Handler(SimpleHTTPRequestHandler):
                 self.wfile.write(data)
                 return
         except Exception as e:  # Never let a snapshot bug take the page down.
-            return self._json({"ready": False, "error": type(e).__name__}, 500)
+            return self._json({"ready": False, "error": type(e).__name__, "detail": str(e)[:200]}, 500)
         if path == "/":
             self.path = "/index.html"
+        self.static = True
         return super().do_GET()
+
+    static = False
+
+    def end_headers(self):
+        # Static files revalidate on every load (they carry Last-Modified, so
+        # unchanged ones answer 304). Without this, Cloudflare and browsers keep
+        # scripts for hours and a rebuilt page shows the old screen.
+        if self.static:
+            self.send_header("cache-control", "no-cache")
+        super().end_headers()
 
 
 def make_server(run_dir, host="127.0.0.1", port=8787, network="mainnet", board_api=None):

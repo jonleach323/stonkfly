@@ -237,7 +237,11 @@ def test_local_server_routes(run_dir, tmp_path):
         assert json.loads(urllib.request.urlopen(base + "/api/audit").read())["ready"]
         png = urllib.request.urlopen(base + "/api/sensory.png")
         assert png.headers["content-type"] == "image/png"
-        assert b"<title>t</title>" in urllib.request.urlopen(base + "/").read()
+        page = urllib.request.urlopen(base + "/")
+        assert b"<title>t</title>" in page.read()
+        # Static files must revalidate; the API documents are never cached.
+        assert page.headers["cache-control"] == "no-cache"
+        assert reply.headers["cache-control"] == "no-store"
         with pytest.raises(urllib.error.HTTPError):
             urllib.request.urlopen(base + "/api/nope")
     finally:
@@ -257,3 +261,38 @@ def test_events_tail_reads_only_the_end(tmp_path):
     events = _read_events(path, limit=50)
     assert [e["tick"] for e in events] == list(range(59_950, 60_000))
     assert _read_events(path, limit=5)[0]["tick"] == 59_995
+
+
+def test_readonly_ledger_falls_back_to_immutable_without_wal(tmp_path, monkeypatch):
+    """A closed WAL ledger on a read-only mount cannot be opened with mode=ro
+    (SQLite wants to create the -shm file); with no -wal file an immutable open
+    reads the same committed rows."""
+    import sqlite3
+
+    from stonkfly.publish import _open_readonly
+
+    path = tmp_path / "ledger.sqlite"
+    db = sqlite3.connect(path, isolation_level=None)
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute("CREATE TABLE t(x)")
+    db.execute("INSERT INTO t VALUES (1)")
+    db.close()  # a clean close checkpoints and removes -wal/-shm
+    assert not (tmp_path / "ledger.sqlite-wal").exists()
+
+    real_connect = sqlite3.connect
+    uris = []
+
+    def connect(database, **kw):
+        uris.append(database)
+        if "immutable" not in database:
+            raise sqlite3.OperationalError("attempt to write a readonly database")
+        return real_connect(database, **kw)
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    assert _open_readonly(path).execute("SELECT x FROM t").fetchall() == [(1,)]
+    assert len(uris) == 2 and "immutable=1" in uris[1]
+
+    # With a -wal present the fallback would miss rows, so the error propagates.
+    (tmp_path / "ledger.sqlite-wal").write_bytes(b"")
+    with pytest.raises(sqlite3.OperationalError):
+        _open_readonly(path)
