@@ -1,0 +1,777 @@
+// Stonkfly watch page. Reads /api/state and /api/board, writes nothing.
+// Every render is wrapped so a missing or odd field never takes the page down.
+
+const POLL_MS = 2000;
+const POLL_HIDDEN_MS = 10000;
+const FETCH_TIMEOUT_MS = 8000;
+const LIVE_BOARD_MAX_AGE_MS = 15000;
+const HEARTBEAT_MAX_AGE_S = 180;
+const NEURONS_DEFAULT = 166700;
+const ROUND_SLOTS = 200;
+
+const $ = (id) => document.getElementById(id);
+const intFmt = new Intl.NumberFormat("en-US");
+const moneyFmt = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+const app = {
+  state: null, stateAt: 0, stateFails: 0, everFetched: false,
+  board: null, boardAt: 0, boardSkew: 0, boardFails: 0,
+  scene: null, sceneLoading: false, sceneFailed: false,
+  paused: false, view: "watch", tab: "rounds",
+  frameSha: null, roundsKey: "", decisionsKey: "", chartKey: "",
+  timers: {},
+};
+
+/* ---------------- helpers ---------------- */
+
+function num(x) {
+  if (x === null || x === undefined || x === "") return null;
+  const v = Number(x);
+  return Number.isFinite(v) ? v : null;
+}
+function pad(n) { return String(n).padStart(2, "0"); }
+function fmtInt(x) { const v = num(x); return v === null ? "—" : intFmt.format(Math.round(v)); }
+function fmtMoney(x, { sign = false } = {}) {
+  const v = num(x);
+  if (v === null) return "—";
+  const s = v < 0 ? "-" : sign && v > 0 ? "+" : "";
+  return `${s}$${moneyFmt.format(Math.abs(v))}`;
+}
+function fmtPct(x, { sign = true } = {}) {
+  const v = num(x);
+  if (v === null) return "—";
+  const s = v < 0 ? "-" : sign && v > 0 ? "+" : "";
+  return `${s}${Math.abs(v).toFixed(2)}%`;
+}
+function fmtSats(n, usd) {
+  const v = num(n);
+  if (v === null) return "—";
+  const u = num(usd);
+  return `${intFmt.format(v)} SATS${u === null ? "" : ` (${fmtMoney(u)})`}`;
+}
+function fmtTime(t) {
+  const v = num(t);
+  if (v === null) return "—";
+  const d = new Date(v * 1000);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fmtAge(t) {
+  const v = num(t);
+  if (v === null) return "—";
+  const s = Math.max(0, Date.now() / 1000 - v);
+  if (s < 60) return `${Math.floor(s)}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+function fmtClock(seconds) {
+  const s = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(s / 60)}:${pad(s % 60)}`;
+}
+function signClass(x) {
+  const v = num(x);
+  if (v === null || v === 0) return "";
+  return v > 0 ? "pos" : "neg";
+}
+function setText(id, text) {
+  const el = $(id);
+  if (el && el.textContent !== text) el.textContent = text;
+}
+function setChip(id, text, tone) {
+  const el = $(id);
+  if (!el) return;
+  if (el.textContent !== text) el.textContent = text;
+  el.className = `chip${tone ? ` ${tone}` : ""}`;
+}
+function el(tag, attrs = {}, children = []) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined) continue;
+    if (k === "class") node.className = v;
+    else if (k === "text") node.textContent = v;
+    else node.setAttribute(k, v);
+  }
+  for (const c of [].concat(children)) {
+    if (c === null || c === undefined) continue;
+    node.append(typeof c === "string" ? document.createTextNode(c) : c);
+  }
+  return node;
+}
+function replaceChildren(node, children) {
+  if (!node) return;
+  node.replaceChildren(...children);
+}
+function safe(fn) {
+  try { return fn(); } catch (e) { console.error(e); return undefined; }
+}
+function explorerTx(signature, network) {
+  return `https://solscan.io/tx/${encodeURIComponent(signature)}${network === "devnet" ? "?cluster=devnet" : ""}`;
+}
+function tileList(tiles) {
+  return Array.isArray(tiles) ? tiles.map((t) => String(t)).join(" ") : "—";
+}
+
+/* ---------------- fetching ---------------- */
+
+async function getJSON(url) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const r = await fetch(url, { cache: "no-store", signal: ctl.signal });
+    let body = null;
+    try { body = await r.json(); } catch (_) { body = null; }
+    return { ok: r.ok, status: r.status, body };
+  } catch (_) {
+    return { ok: false, status: 0, body: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function schedule(name, fn, ms) {
+  clearTimeout(app.timers[name]);
+  app.timers[name] = setTimeout(fn, ms);
+}
+function pollDelay() { return document.hidden ? POLL_HIDDEN_MS : POLL_MS; }
+
+async function pollState() {
+  const r = await getJSON("/api/state");
+  app.everFetched = true;
+  if (r.body && typeof r.body === "object" && "ready" in r.body) {
+    app.state = r.body;
+    app.stateAt = Date.now();
+    app.stateFails = 0;
+  } else {
+    app.stateFails += 1;
+  }
+  safe(renderAll);
+  if (app.scene && app.state) safe(() => app.scene.update(app.state, (currentBoard() || {}).board || null));
+  schedule("state", pollState, pollDelay());
+}
+
+async function pollBoard() {
+  const r = await getJSON("/api/board");
+  const b = r.body;
+  if (r.ok && b && b.live === true && Array.isArray(b.tile_stakes)) {
+    app.board = b;
+    app.boardAt = Date.now();
+    app.boardFails = 0;
+    const fetched = num(b.fetched_at);
+    // Countdown runs on the server's clock: correct for skew between it and this browser.
+    app.boardSkew = fetched === null ? 0 : Date.now() / 1000 - fetched;
+  } else {
+    app.boardFails += 1;
+  }
+  safe(renderBoard);
+  safe(tick);
+  if (app.scene && app.state) safe(() => app.scene.update(app.state, (currentBoard() || {}).board || null));
+  schedule("board", pollBoard, pollDelay());
+}
+
+/** Which board to draw: the live proxy when fresh, else the retina's snapshot, else a stale live board. */
+function currentBoard() {
+  const s = app.state;
+  const liveFresh = app.board && Date.now() - app.boardAt < LIVE_BOARD_MAX_AGE_MS;
+  if (liveFresh) return { board: app.board, source: "live" };
+  if (s && s.ready && s.board && Array.isArray(s.board.tile_stakes)) return { board: s.board, source: "snapshot" };
+  if (app.board) return { board: app.board, source: "stale" };
+  return null;
+}
+
+/* ---------------- rendering ---------------- */
+
+function renderAll() {
+  const s = app.state;
+  const ready = !!(s && s.ready);
+  safe(renderFooter);
+  if (!ready) { safe(renderWaiting); safe(renderBoard); return; }
+  safe(() => renderBrain(s));
+  safe(() => renderPick(s));
+  safe(() => renderStack(s));
+  safe(() => renderHoldings(s));
+  safe(() => renderRounds(s));
+  safe(() => renderDecisions(s));
+  safe(() => renderPerf(s));
+  safe(() => renderSensory(s));
+  safe(renderBoard);
+}
+
+function renderWaiting() {
+  const text = app.everFetched && !app.state ? "DISCONNECTED" : "WAITING FOR WORKER";
+  setChip("fresh-chip", text, app.state ? "" : "bad");
+  setChip("pick-status", "WAITING", "");
+  setText("pick-tiles", text);
+  setText("stimulus", "—");
+  setChip("pick-meta", "OBSERVATION —", "");
+  setText("sensory-meta", text);
+  if (!app.state) return;
+  const e = $("equity");
+  if (e) { e.firstElementChild.textContent = "$—"; e.lastElementChild.textContent = ""; }
+}
+
+function renderBrain(s) {
+  const n = s.neural || {};
+  const model = s.model || {};
+  setText("b-neurons", fmtInt(model.neurons ?? NEURONS_DEFAULT));
+  setText("b-spikes", fmtInt(n.total_spikes));
+  const edges = $("b-edges");
+  if (edges) {
+    const learning = !(s.settings && s.settings.learning === false);
+    replaceChildren(edges, [fmtInt(n.changed_edges), el("small", { text: learning ? "KC→MBON EDGES" : "FROZEN MEMORY" })]);
+  }
+  const time = $("b-time");
+  if (time) {
+    const ms = num(n.brain_ms);
+    const text = ms === null ? "—" : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`;
+    replaceChildren(time, [text, el("small", { text: "NEURAL TIME" })]);
+  }
+  const note = $("stage-note");
+  if (note) {
+    const stub = !!(s.status && s.status.stub_brain);
+    note.textContent = stub ? "STUB BRAIN · SEEDED NOISE" : "DECORATIVE AVATAR";
+    note.classList.toggle("bad", stub);
+  }
+}
+
+function renderPick(s) {
+  const n = s.neural || {};
+  const picks = new Set(Array.isArray(n.tiles) ? n.tiles : []);
+  const excess = Array.isArray(n.excess_rel) ? n.excess_rel : Array.isArray(n.excess_hz) ? n.excess_hz : [];
+  const hz = Array.isArray(n.group_hz) ? n.group_hz : [];
+  let top = -1;
+  let best = -Infinity;
+  excess.forEach((v, i) => { const x = num(v); if (x !== null && x > best) { best = x; top = i; } });
+  const grid = $("minigrid");
+  if (grid) {
+    const items = [];
+    for (let i = 0; i < 21; i++) {
+      const tile = i + 1;
+      const lit = picks.has(tile);
+      const bits = [];
+      if (num(hz[i]) !== null) bits.push(`${num(hz[i]).toFixed(1)} Hz`);
+      if (num(excess[i]) !== null) bits.push(`excess ${num(excess[i]).toFixed(2)}`);
+      items.push(el("li", {
+        class: `${lit ? "lit" : ""}${i === top && lit ? " top" : ""}`.trim() || null,
+        title: `Tile ${tile}${bits.length ? ` · ${bits.join(" · ")}` : ""}`,
+        "aria-label": `Tile ${tile}${lit ? ", selected" : ""}`,
+        text: String(tile),
+      }));
+    }
+    replaceChildren(grid, items);
+  }
+  const d0 = Array.isArray(s.decisions) && s.decisions.length ? s.decisions[0] : null;
+  const roundId = d0 && d0.round_id != null ? d0.round_id : s.board && s.board.round_id;
+  const count = picks.size;
+  const tiles = Array.isArray(n.tiles) ? n.tiles : [];
+  const line = $("pick-tiles");
+  if (line) {
+    replaceChildren(line, [
+      `${roundId != null ? `R#${roundId} · ` : ""}${count} TILE${count === 1 ? "" : "S"} `,
+      el("span", { class: "tilelist", text: tiles.length ? `· ${tileList(tiles)}` : "" }),
+    ]);
+  }
+  const status = d0 ? String(d0.status || "").toUpperCase() : "";
+  let statusText = status || "—";
+  let tone = "";
+  if (status === "VETO") { statusText = `VETO${d0.reason ? ` · ${d0.reason}` : ""}`; tone = "bad"; }
+  else if (status === "CONFIRMED") tone = "ok";
+  else if (status === "FAILED") tone = "bad";
+  else if (status === "PAPER") { statusText = "PAPER · SIMULATED"; tone = "info"; }
+  setChip("pick-status", statusText.toUpperCase(), tone);
+  setChip("pick-meta", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)}`, "");
+
+  const stim = $("stimulus");
+  if (stim) {
+    const kind = String(n.stimulus || "none");
+    const ms = num(n.stimulus_ms);
+    const dur = ms && ms > 0 ? `${Math.round(ms)} ms` : "200 ms";
+    let text = "NO ADDED REINFORCEMENT";
+    if (kind === "reward") text = `REWARD INPUT · ${dur} → 15 PAM11 CELLS · ${fmtInt(n.reward_spikes)} SPIKES`;
+    else if (kind === "aversive") text = `AVERSIVE INPUT · ${dur} → 2 PPL101 CELLS · ${fmtInt(n.aversive_spikes)} SPIKES`;
+    const kc = num(n.KC_spikes);
+    if (kc !== null) text += ` · KC ${fmtInt(kc)} SPIKES`;
+    stim.textContent = text;
+    stim.className = `stimulus ${kind === "reward" ? "reward" : kind === "aversive" ? "aversive" : ""}`.trim();
+  }
+  const cells = $("readout-cells");
+  if (cells) {
+    const c = s.readout && num(s.readout.cells);
+    cells.textContent = c ? ` (${fmtInt(c)} cells in this graph)` : "";
+  }
+}
+
+function renderStack(s) {
+  const p = s.portfolio || {};
+  const equity = $("equity");
+  if (equity) {
+    const v = num(p.equity);
+    const dollars = equity.firstElementChild;
+    const cents = equity.lastElementChild;
+    if (v === null) { dollars.textContent = "$—"; cents.textContent = ""; }
+    else {
+      const [whole, frac] = moneyFmt.format(Math.abs(v)).split(".");
+      dollars.textContent = `${v < 0 ? "-" : ""}$${whole}`;
+      cents.textContent = `.${frac}`;
+    }
+  }
+  setText("value-unit", s.mode === "live" ? "USDC · LIVE WALLET" : "USDC · SIMULATED");
+  const pnl = $("pnl");
+  if (pnl) {
+    pnl.textContent = `${fmtMoney(p.pnl, { sign: true })} · ${fmtPct(p.pnl_percent)}`;
+    pnl.className = `num ${signClass(p.pnl)}`.trim();
+  }
+  const inPlay = $("in-play");
+  if (inPlay) {
+    const open = Array.isArray(p.open_rounds) ? p.open_rounds.length : 0;
+    replaceChildren(inPlay, [fmtMoney(p.in_play), el("small", { text: `${open} OPEN ROUND${open === 1 ? "" : "S"}` })]);
+  }
+  renderFreshChip(s);
+}
+
+function renderFreshChip(s) {
+  const st = s.status || {};
+  const age = Date.now() / 1000 - (num(s.observed_at) ?? 0);
+  if (st.halted) setChip("fresh-chip", `HALTED · ${String(st.halted).toUpperCase()}`, "bad");
+  else if (!st.running) setChip("fresh-chip", `STALE · OBSERVATION ${fmtAge(s.observed_at)} AGO`, "");
+  else setChip("fresh-chip", `OBSERVATION ${fmtAge(s.observed_at)} AGO`, age < 120 ? "ok" : "");
+}
+
+function renderHoldings(s) {
+  const p = s.portfolio || {};
+  setText("h-cash", fmtMoney(p.cash));
+  setText("h-inplay", fmtMoney(p.in_play));
+  const sats = $("h-sats");
+  if (sats) {
+    const v = num(p.sats_won);
+    replaceChildren(sats, v === null ? ["—"] : [`${intFmt.format(v)} SATS`, el("small", { text: fmtMoney(p.sats_won_usd) })]);
+  }
+  setText("h-rounds", `${fmtInt(p.rounds_won)} / ${fmtInt(p.rounds_played)}`);
+  const hit = num(p.hit_rate_percent);
+  setText("h-hit", hit === null ? "—" : `${hit.toFixed(1)}%`);
+}
+
+function renderRounds(s) {
+  const rounds = Array.isArray(s.rounds) ? s.rounds : [];
+  const key = JSON.stringify(rounds.map((r) => [r.round_id, r.status, r.won, r.pnl, r.signature, r.sats]));
+  if (key === app.roundsKey) return;
+  app.roundsKey = key;
+  const body = $("rounds-body");
+  if (!body) return;
+  if (!rounds.length) { replaceChildren(body, [el("tr", {}, el("td", { colspan: "8", class: "dim", text: "NO ROUNDS YET" }))]); return; }
+  const rows = rounds.map((r) => {
+    const status = String(r.status || "").toUpperCase();
+    let result = "OPEN", tone = "dim";
+    if (r.won === true) { result = "HIT"; tone = "pos"; }
+    else if (r.won === false) { result = "MISS"; tone = "neg"; }
+    else if (status === "FAILED") { result = "FAILED"; tone = "neg"; }
+    else if (status === "UNKNOWN") { result = "UNKNOWN"; tone = "neg"; }
+    else if (status === "PREPARED" || status === "SENT") { result = status; }
+    const resultCell = el("td", { class: tone }, [result]);
+    if (r.simulated === true) resultCell.append(el("span", { class: "tag", text: "SIM" }));
+    else if (status === "PAPER") resultCell.append(el("span", { class: "tag", text: "PAPER" }));
+    if (r.winning_tile != null) resultCell.append(el("small", { text: `winner ${r.winning_tile}` }));
+    const sats = num(r.sats);
+    const tx = r.signature
+      ? el("a", { href: explorerTx(r.signature, s.network), target: "_blank", rel: "noopener noreferrer", "aria-label": `Transaction for round ${r.round_id} on Solscan` }, ["TX ↗"])
+      : el("span", { class: "dim", text: status === "PAPER" || r.simulated ? "SIM" : "—" });
+    return el("tr", {}, [
+      el("td", {}, [`#${r.round_id ?? "—"}`, el("small", { text: fmtTime(r.time) })]),
+      el("td", {}, [String(r.tile_count ?? (Array.isArray(r.tiles) ? r.tiles.length : "—")), el("small", { text: tileList(r.tiles) })]),
+      el("td", { text: fmtMoney(r.stake) }),
+      resultCell,
+      el("td", { text: fmtMoney(r.refund) }),
+      el("td", {}, sats === null ? ["—"] : [intFmt.format(sats), el("small", { text: fmtMoney(r.sats_usd) })]),
+      el("td", { class: signClass(r.pnl), text: fmtMoney(r.pnl, { sign: true }) }),
+      el("td", {}, [tx]),
+    ]);
+  });
+  replaceChildren(body, rows);
+}
+
+function renderDecisions(s) {
+  const decisions = Array.isArray(s.decisions) ? s.decisions : [];
+  const key = JSON.stringify(decisions.map((d) => [d.tick, d.status, d.reason, d.kc_spikes]));
+  if (key === app.decisionsKey) return;
+  app.decisionsKey = key;
+  const body = $("decisions-body");
+  if (!body) return;
+  if (!decisions.length) { replaceChildren(body, [el("tr", {}, el("td", { colspan: "6", class: "dim", text: "NO OBSERVATIONS YET" }))]); return; }
+  const rows = decisions.map((d) => {
+    const status = String(d.status || "").toUpperCase();
+    const tone = status === "VETO" || status === "FAILED" ? "neg" : status === "CONFIRMED" ? "pos" : "";
+    const statusCell = el("td", { class: tone }, [status || "—"]);
+    if (d.reason) statusCell.append(el("small", { text: String(d.reason) }));
+    const stim = String(d.stimulus || "none").toUpperCase();
+    return el("tr", {}, [
+      el("td", {}, [`#${d.tick ?? "—"}`, el("small", { text: fmtTime(d.time) })]),
+      el("td", { text: d.round_id != null ? `#${d.round_id}` : "—" }),
+      el("td", {}, [String(d.tile_count ?? (Array.isArray(d.tiles) ? d.tiles.length : "—")), el("small", { text: tileList(d.tiles) })]),
+      statusCell,
+      el("td", { class: stim === "REWARD" ? "pos" : stim === "AVERSIVE" ? "neg" : "dim", text: stim }),
+      el("td", { text: fmtInt(d.kc_spikes) }),
+    ]);
+  });
+  replaceChildren(body, rows);
+}
+
+function renderPerf(s) {
+  const p = s.portfolio || {};
+  const settings = s.settings || {};
+  const costs = s.costs || {};
+  setText("s-cash", fmtMoney(p.cash));
+  setText("s-fees", fmtMoney(p.fees));
+  setText("s-refunds", fmtMoney(p.refunds));
+  setText("s-sats", fmtSats(p.sats_won, p.sats_won_usd));
+  const best = $("s-best");
+  if (best) { best.textContent = fmtMoney(p.best_round_pnl, { sign: true }); best.className = `num ${signClass(p.best_round_pnl)}`.trim(); }
+  const chip = $("perf-chip");
+  if (chip) {
+    chip.textContent = `${fmtInt(p.rounds_played)} ROUNDS · ${fmtMoney(p.pnl, { sign: true })}${s.mode === "live" ? "" : " · SIMULATED"}`;
+    chip.className = `chip ${signClass(p.pnl)}`.trim();
+  }
+  const stake = settings.stake != null ? fmtMoney(settings.stake) : "$1";
+  const daily = settings.daily_deploys != null ? fmtInt(settings.daily_deploys) : "300";
+  const stop = settings.loss_stop != null ? fmtMoney(settings.loss_stop) : "$20";
+  const today = num(costs.deploys_today);
+  setText("limits", `${stake} / ROUND · ${daily} DEPLOYS / DAY · 1 DEPLOY PER ROUND · LOSS STOP ${stop}${today === null ? "" : ` · ${fmtInt(today)} DEPLOYS TODAY`}`);
+  renderChart(s);
+}
+
+function renderChart(s) {
+  const svg = $("equity-chart");
+  if (!svg) return;
+  const hist = (Array.isArray(s.history) ? s.history : []).map((h) => ({ t: num(h.time), v: num(h.equity) })).filter((h) => h.t !== null && h.v !== null);
+  const initial = num(s.portfolio && s.portfolio.initial);
+  // Narrow screens get a narrower viewBox so axis text stays readable instead of scaling down.
+  const avail = svg.clientWidth || (svg.parentElement && svg.parentElement.clientWidth) || 0;
+  const W = avail > 0 && avail < 560 ? 360 : 640;
+  const key = `${W}:${hist.length}:${hist.length ? hist[hist.length - 1].t : 0}:${hist.length ? hist[hist.length - 1].v : 0}:${initial}`;
+  if (key === app.chartKey) return;
+  app.chartKey = key;
+  svg.setAttribute("viewBox", `0 0 ${W} 220`);
+  const NS = "http://www.w3.org/2000/svg";
+  const mk = (tag, attrs, text) => {
+    const n = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+    if (text !== undefined) n.textContent = text;
+    return n;
+  };
+  const H = 220, L = 58, R = 12, T = 14, B = 26;
+  const nodes = [];
+  if (hist.length < 2) {
+    nodes.push(mk("text", { x: W / 2, y: H / 2, "text-anchor": "middle", class: "empty" }, hist.length ? "ONE OBSERVATION · NO CURVE YET" : "NO HISTORY YET"));
+    svg.replaceChildren(...nodes);
+    return;
+  }
+  const t0 = hist[0].t, t1 = hist[hist.length - 1].t;
+  const values = hist.map((h) => h.v).concat(initial === null ? [] : [initial]);
+  let lo = Math.min(...values), hi = Math.max(...values);
+  const padY = Math.max((hi - lo) * 0.15, 0.01);
+  lo -= padY; hi += padY;
+  const x = (t) => L + ((t - t0) / Math.max(t1 - t0, 1)) * (W - L - R);
+  const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  // Steps, not slopes: equity only changes at observations.
+  let d = "";
+  hist.forEach((h, i) => {
+    const px = x(h.t).toFixed(1), py = y(h.v).toFixed(1);
+    if (i === 0) d += `M${px} ${py}`;
+    else d += `H${px}V${py}`;
+  });
+  const last = hist[hist.length - 1].v;
+  const color = initial !== null && last < initial ? "#ff4b78" : "#bdff32";
+  nodes.push(mk("rect", { x: L, y: T, width: W - L - R, height: H - T - B, fill: "none", stroke: "#32353e", "stroke-width": 2, "shape-rendering": "crispEdges" }));
+  if (initial !== null) {
+    nodes.push(mk("line", { x1: L, x2: W - R, y1: y(initial).toFixed(1), y2: y(initial).toFixed(1), stroke: "#989aaa", "stroke-width": 2, "stroke-dasharray": "6 6", "shape-rendering": "crispEdges" }));
+    nodes.push(mk("text", { x: L - 6, y: (y(initial) + 4).toFixed(1), "text-anchor": "end", class: "axis" }, `$${moneyFmt.format(initial)}`));
+  }
+  // Skip an axis label that would sit on top of the starting-balance label.
+  const yInit = initial === null ? null : y(initial);
+  if (yInit === null || Math.abs(yInit - (T + 6)) > 12) nodes.push(mk("text", { x: L - 6, y: T + 10, "text-anchor": "end", class: "axis" }, `$${moneyFmt.format(hi)}`));
+  if (yInit === null || Math.abs(yInit - (H - B - 4)) > 12) nodes.push(mk("text", { x: L - 6, y: H - B, "text-anchor": "end", class: "axis" }, `$${moneyFmt.format(lo)}`));
+  nodes.push(mk("text", { x: L, y: H - 8, class: "axis" }, fmtTime(t0)));
+  nodes.push(mk("text", { x: W - R, y: H - 8, "text-anchor": "end", class: "axis" }, fmtTime(t1)));
+  nodes.push(mk("path", { d, fill: "none", stroke: color, "stroke-width": 3, "stroke-linejoin": "miter", "shape-rendering": "crispEdges" }));
+  nodes.push(mk("rect", { x: (x(t1) - 4).toFixed(1), y: (y(last) - 4).toFixed(1), width: 8, height: 8, fill: color }));
+  svg.setAttribute("aria-label", `Equity over ${hist.length} observations, from $${moneyFmt.format(hist[0].v)} to $${moneyFmt.format(last)}`);
+  svg.replaceChildren(...nodes);
+}
+
+function renderSensory(s) {
+  const img = $("sensory");
+  const pub = s.publication || {};
+  const sha = pub.frame_sha256 || null;
+  if (img && sha && sha !== app.frameSha) {
+    app.frameSha = sha;
+    img.src = `/api/sensory.png?v=${encodeURIComponent(sha.slice(0, 16))}`;
+    img.hidden = false;
+    const empty = $("sensory-empty");
+    if (empty) empty.hidden = true;
+  }
+  setText("sensory-meta", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)}${sha ? ` · SHA ${sha.slice(0, 8)}` : ""}`);
+}
+
+function renderBoardChip(cb) {
+  const b = cb.board;
+  if (cb.source === "live") setChip("board-chip", "LIVE BOARD", "ok");
+  else if (cb.source === "snapshot") setChip("board-chip", `SNAPSHOT · ${fmtAge(b.fetched_at)} AGO`, "");
+  else setChip("board-chip", `STALE · ${fmtAge(b.fetched_at)} AGO`, "bad");
+}
+
+function renderBoard() {
+  const s = app.state;
+  const cb = currentBoard();
+  if (!cb) {
+    setChip("board-chip", app.everFetched ? "BOARD OFFLINE" : "CONNECTING", app.everFetched ? "bad" : "");
+    const grid = $("tiles");
+    if (grid && !grid.childElementCount) {
+      const items = [];
+      for (let i = 0; i < 21; i++) items.push(el("li", { class: "empty", "aria-label": `Tile ${i + 1}: no data` }, [el("span", { text: String(i + 1) }), el("b", { text: "—" })]));
+      replaceChildren(grid, items);
+    }
+    return;
+  }
+  const b = cb.board;
+  renderBoardChip(cb);
+  setText("round-id", b.round_id != null ? `#${b.round_id}` : "#—");
+  setText("pot", fmtMoney(b.pot_usd));
+  setText("miners", fmtInt(b.miners));
+
+  const stakes = Array.isArray(b.tile_stakes) ? b.tile_stakes : [];
+  const top = Math.max(1e-9, ...stakes.map((t) => num(t && t.stake_usd) ?? 0));
+  const neural = (s && s.ready && s.neural) || {};
+  const picks = new Set(Array.isArray(neural.tiles) ? neural.tiles : []);
+  const d0 = s && s.ready && Array.isArray(s.decisions) && s.decisions.length ? s.decisions[0] : null;
+  const pickRound = d0 && d0.round_id != null ? d0.round_id : null;
+  const winners = Array.isArray(b.previous_winners) ? b.previous_winners : [];
+  const lastWin = winners.length && winners[0] ? num(winners[0].tile) : (b.previous_round ? num(b.previous_round.winning_tile) : null);
+
+  const grid = $("tiles");
+  if (grid) {
+    const items = [];
+    for (let i = 0; i < 21; i++) {
+      const tile = i + 1;
+      const st = stakes[i] || {};
+      const stake = num(st.stake_usd);
+      const share = stake === null ? 0 : stake / top;
+      const classes = [];
+      if (picks.has(tile)) classes.push("pick");
+      if (lastWin === tile) classes.push("win");
+      if (stake === null) classes.push("empty");
+      const li = el("li", {
+        class: classes.join(" ") || null,
+        style: `--a:${(0.06 + 0.74 * share).toFixed(3)}`,
+        "aria-label": `Tile ${tile}: ${stake === null ? "unknown stake" : fmtMoney(stake)}${st.miners != null ? `, ${st.miners} miners` : ""}${picks.has(tile) ? ", fly pick" : ""}${lastWin === tile ? ", last winner" : ""}`,
+        title: `Tile ${tile} · ${stake === null ? "—" : fmtMoney(stake)}${st.miners != null ? ` · ${st.miners} miners` : ""}`,
+      }, [el("span", { text: String(tile) }), el("b", { text: stake === null ? "—" : stake >= 1000 ? `$${intFmt.format(Math.round(stake))}` : `$${stake.toFixed(stake >= 100 ? 0 : 1)}` })]);
+      items.push(li);
+    }
+    replaceChildren(grid, items);
+  }
+  const pr = $("pick-round");
+  if (pr) {
+    if (pickRound === null) pr.textContent = "";
+    else pr.textContent = b.round_id != null && pickRound !== b.round_id ? `(FROM R#${pickRound})` : `(R#${pickRound})`;
+  }
+  const lw = $("last-winners");
+  if (lw) {
+    replaceChildren(lw, winners.slice(0, 5).map((w) => el("li", { "aria-label": `Round ${w.round_id}: tile ${w.tile}` }, [String(w.tile ?? "—"), el("small", { text: w.round_id != null ? `R#${w.round_id}` : "" })])));
+    if (!winners.length) lw.append(el("li", { class: "dim", text: "—" }));
+  }
+}
+
+/** One-second ticker: countdown, ages, freshness. */
+function tick() {
+  const s = app.state;
+  const cb = currentBoard();
+  const out = $("countdown");
+  const bar = $("countdown-bar");
+  const fill = $("countdown-fill");
+  if (!out || !bar || !fill) return;
+  let text = "—", frac = 0, cls = "";
+  if (cb) {
+    const b = cb.board;
+    if (b.pending_activation) { text = "ROTATING"; frac = 1; cls = "rotating"; }
+    else {
+      const now = Date.now() / 1000 - (cb.source === "snapshot" ? 0 : app.boardSkew);
+      const endsAt = num(b.ends_at), startedAt = num(b.started_at), slotMs = num(b.slot_ms) || 316, slotsLeft = num(b.slots_remaining), fetchedAt = num(b.fetched_at);
+      let remaining = null;
+      if (endsAt !== null) remaining = endsAt - now;
+      else if (slotsLeft !== null) remaining = (slotsLeft * slotMs) / 1000 - (fetchedAt === null ? 0 : now - fetchedAt);
+      const total = endsAt !== null && startedAt !== null && endsAt > startedAt ? endsAt - startedAt : (ROUND_SLOTS * slotMs) / 1000;
+      if (remaining === null) text = "—";
+      else if (remaining <= 0) { text = cb.source === "live" ? "DRAWING" : "ENDED"; frac = 0; }
+      else {
+        text = fmtClock(remaining);
+        frac = Math.min(1, Math.max(0, remaining / total));
+        const minSlots = num(s && s.settings && s.settings.min_slots_remaining) ?? 40;
+        if (remaining < (minSlots * slotMs) / 1000) cls = "late";
+      }
+    }
+  }
+  out.textContent = text;
+  out.className = `num ${cls}`.trim();
+  bar.className = `countdown ${cls}`.trim();
+  bar.setAttribute("aria-valuenow", String(Math.round(frac * 100)));
+  bar.setAttribute("aria-valuetext", text);
+  fill.style.width = `${(frac * 100).toFixed(1)}%`;
+  if (s && s.ready) { safe(() => renderFreshChip(s)); safe(renderFooter); }
+  // The live board goes stale between polls when the tab is hidden; keep the chip honest.
+  if (cb) safe(() => renderBoardChip(cb));
+}
+
+function renderFooter() {
+  const s = app.state;
+  let chip = "CONNECTING", tone = "";
+  let fresh = "—", exec = "—";
+  if (app.everFetched && !s) { chip = "DISCONNECTED"; tone = "bad"; fresh = "NO RESPONSE FROM /API/STATE"; }
+  else if (s && !s.ready) { chip = "WAITING FOR WORKER"; tone = ""; fresh = `NO LEDGER YET · PUBLISHED ${fmtTime(s.published_at)}`; }
+  else if (s) {
+    const st = s.status || {};
+    const heartbeatAge = Date.now() / 1000 - (num(st.heartbeat) ?? 0);
+    if (app.stateFails >= 3) { chip = "DISCONNECTED"; tone = "bad"; }
+    else if (st.halted) { chip = "WORKER HALTED"; tone = "bad"; }
+    else if (!st.running || heartbeatAge > HEARTBEAT_MAX_AGE_S) { chip = "STALE"; tone = ""; }
+    else if (s.mode === "live") { chip = "LIVE WALLET"; tone = "ok"; }
+    else if (app.board && Date.now() - app.boardAt < LIVE_BOARD_MAX_AGE_MS && st.feed !== "fixture") { chip = "LIVE BOARD"; tone = "info"; }
+    else { chip = "PAPER SIMULATION"; tone = "info"; }
+    const phase = String(st.phase || "stopped").toUpperCase();
+    fresh = `${phase} · OBSERVATION ${fmtAge(s.observed_at)} AGO`;
+    if (st.halted) fresh += ` · ${String(st.halted).toUpperCase()}`;
+    if (s.mode === "live") exec = "LIVE WALLET · REAL DEPLOYS";
+    else if (st.feed === "fixture") exec = "SYNTHETIC ROUNDS";
+    else exec = "PAPER SIMULATION · NO WALLET";
+    if (st.stub_brain) exec += " · STUB BRAIN";
+    if (s.network === "devnet") exec += " · DEVNET";
+  }
+  setChip("conn-chip", chip, tone);
+  setText("foot-fresh", fresh);
+  setText("foot-exec", exec);
+}
+
+/* ---------------- scene ---------------- */
+
+function sceneFallback(title) {
+  app.sceneFailed = true;
+  const canvas = $("output");
+  const fb = $("stage-fallback");
+  if (canvas) canvas.hidden = true;
+  if (fb) fb.hidden = false;
+  setText("stage-fallback-title", title);
+  setText("stage-caption", "STATIC VIEW");
+}
+
+async function loadScene() {
+  if (app.scene || app.sceneLoading || app.sceneFailed) return;
+  const canvas = $("output");
+  if (!canvas) return;
+  app.sceneLoading = true;
+  let hasGL = false;
+  try {
+    const probe = document.createElement("canvas");
+    hasGL = !!(probe.getContext("webgl2") || probe.getContext("webgl"));
+  } catch (_) { hasGL = false; }
+  if (!hasGL) { app.sceneLoading = false; sceneFallback("WEBGL OFF"); return; }
+  try {
+    const mod = await import("/scene.js");
+    const scene = mod && typeof mod.startScene === "function" ? mod.startScene(canvas) : null;
+    if (!scene || typeof scene.update !== "function") throw new Error("scene did not start");
+    app.scene = scene;
+    if (app.paused) safe(() => scene.setPaused(true));
+    safe(() => scene.setVisible(app.view === "watch" && !document.hidden));
+    if (app.state) safe(() => scene.update(app.state, (currentBoard() || {}).board || null));
+  } catch (e) {
+    console.warn("scene unavailable:", e && e.message ? e.message : e);
+    sceneFallback("3D VIEW OFF");
+  } finally {
+    app.sceneLoading = false;
+  }
+}
+
+function setPaused(paused) {
+  app.paused = paused;
+  document.body.classList.toggle("motion-paused", paused);
+  const btn = $("pause-btn");
+  if (btn) { btn.setAttribute("aria-pressed", String(paused)); btn.textContent = paused ? "RESUME MOTION" : "PAUSE MOTION"; }
+  if (app.scene) safe(() => app.scene.setPaused(paused));
+}
+
+/* ---------------- routing and tabs ---------------- */
+
+function route() {
+  const hash = (location.hash || "#watch").replace(/^#/, "");
+  const view = hash === "how-it-works" ? "how" : "watch";
+  const changed = view !== app.view;
+  app.view = view;
+  const watch = $("watch"), how = $("how-it-works");
+  if (watch) watch.hidden = view !== "watch";
+  if (how) how.hidden = view !== "how";
+  document.querySelectorAll("[data-view-link]").forEach((a) => {
+    if (a.dataset.viewLink === view) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+  document.title = view === "how" ? "HOW IT WORKS · STONKFLY" : "STONKFLY · a fly connectome plays SatRush";
+  if (changed && hash !== "main") window.scrollTo(0, 0);
+  if (app.scene) safe(() => app.scene.setVisible(view === "watch" && !document.hidden));
+  if (view === "watch") loadScene();
+}
+
+function selectTab(name, focus) {
+  app.tab = name;
+  document.querySelectorAll("[role=tab]").forEach((t) => {
+    const on = t.dataset.tab === name;
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+    const panel = $(t.getAttribute("aria-controls"));
+    if (panel) panel.hidden = !on;
+    if (on && focus) t.focus();
+  });
+}
+
+function initTabs() {
+  const tabs = Array.from(document.querySelectorAll("[role=tab]"));
+  tabs.forEach((t, i) => {
+    t.addEventListener("click", () => selectTab(t.dataset.tab, false));
+    t.addEventListener("keydown", (e) => {
+      let j = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") j = (i + 1) % tabs.length;
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") j = (i - 1 + tabs.length) % tabs.length;
+      else if (e.key === "Home") j = 0;
+      else if (e.key === "End") j = tabs.length - 1;
+      if (j !== null) { e.preventDefault(); selectTab(tabs[j].dataset.tab, true); }
+    });
+  });
+}
+
+/* ---------------- boot ---------------- */
+
+function init() {
+  initTabs();
+  const btn = $("pause-btn");
+  if (btn) btn.addEventListener("click", () => setPaused(!app.paused));
+  if (reducedMotion.matches) setPaused(true);
+  const img = $("sensory");
+  if (img) {
+    img.addEventListener("error", () => { img.hidden = true; const e = $("sensory-empty"); if (e) e.hidden = false; });
+  }
+  window.addEventListener("hashchange", route);
+  const rechart = () => { app.chartKey = ""; if (app.state && app.state.ready) safe(() => renderChart(app.state)); };
+  const perf = $("perf");
+  if (perf) perf.addEventListener("toggle", rechart);
+  window.addEventListener("resize", () => schedule("rechart", rechart, 200));
+  document.addEventListener("visibilitychange", () => {
+    if (app.scene) safe(() => app.scene.setVisible(app.view === "watch" && !document.hidden));
+    if (!document.hidden) { schedule("state", pollState, 0); schedule("board", pollBoard, 0); }
+  });
+  route();
+  pollState();
+  pollBoard();
+  setInterval(() => safe(tick), 1000);
+  if (app.view === "watch") {
+    if ("requestIdleCallback" in window) requestIdleCallback(() => loadScene(), { timeout: 1500 });
+    else setTimeout(loadScene, 300);
+  }
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+else init();

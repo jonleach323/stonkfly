@@ -1,0 +1,12 @@
+{
+  "name": "STONKFLY",
+  "short_name": "STONKFLY",
+  "description": "A fly-connectome simulation plays SatRush, a 21-tile on-chain game on Solana. No edge, expected loss, decorative avatar.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#060709",
+  "background_color": "#060709",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
