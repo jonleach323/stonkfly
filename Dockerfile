@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir . && chmod +x /usr/local/bin/stonkfly-entrypoint
 ENV STONKFLY_DATA=/data \
     STONKFLY_RUNS=/runs \
     STONKFLY_SITE=/app/site \
+    STONKFLY_CONTAINER=1 \
     OPENBLAS_NUM_THREADS=1 \
     PYTHONUNBUFFERED=1
 VOLUME ["/data", "/runs"]

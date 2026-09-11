@@ -39,7 +39,11 @@ case "${1:-worker}" in
     ;;
   watch)
     mkdir -p "$OUT"
-    exec python -m stonkfly serve --out "$OUT" --host 0.0.0.0 --port "${STONKFLY_WATCH_PORT:-8787}" --network "$NETWORK"
+    # In the container the page always listens on 8787; docker compose maps STONKFLY_WATCH_PORT on the
+    # host onto it. Outside a container (systemd) the variable is the listening port itself.
+    PORT=8787
+    [ -z "${STONKFLY_CONTAINER:-}" ] && PORT="${STONKFLY_WATCH_PORT:-8787}"
+    exec python -m stonkfly serve --out "$OUT" --host 0.0.0.0 --port "$PORT" --network "$NETWORK"
     ;;
   sh|bash|python|python3|cat)
     exec "$@"
