@@ -16,6 +16,11 @@ prepare_if_needed() {
   python -m stonkfly verify
 }
 
+# A bare keypair filename refers to the run volume: that is where `keygen` writes it.
+if [ -n "${SATRUSH_KEYPAIR:-}" ] && [ ! -f "$SATRUSH_KEYPAIR" ] && [ -f "$RUNS/$SATRUSH_KEYPAIR" ]; then
+  export SATRUSH_KEYPAIR="$RUNS/$SATRUSH_KEYPAIR"
+fi
+
 case "${1:-worker}" in
   worker)
     prepare_if_needed
