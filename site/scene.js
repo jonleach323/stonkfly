@@ -31,6 +31,8 @@ const PALETTE = {
   crtDark: 0x5a564c,
   keyboard: 0x8f8a78,
   keys: 0x4d4b45,
+  mouse: 0x9a9483,
+  mousePad: 0x1c1a24,
   stool: 0x3a2f45,
   metal: 0x5b6070,
   body: 0x7f8ba3,
@@ -65,6 +67,7 @@ function emissiveBox(w, h, d, color, intensity, x, y, z) {
 
 // Cylinder between two points; used for legs and antennae.
 const UP = new THREE.Vector3(0, 1, 0);
+const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const tmpDir = new THREE.Vector3();
 function placeSegment(mesh, a, b) {
   tmpDir.subVectors(b, a);
@@ -266,6 +269,24 @@ function buildMonitor(scene, screenTexture, yaw) {
   const led = emissiveBox(0.025, 0.025, 0.01, PALETTE.acid, 2.5, 0.44, 0.13, 0.145);
   group.add(led);
 
+  // Cursor: a white arrow a hair in front of the glass; it moves with the mouse.
+  const arrow = new THREE.Shape();
+  arrow.moveTo(0, 0);
+  arrow.lineTo(0, -0.036);
+  arrow.lineTo(0.009, -0.027);
+  arrow.lineTo(0.016, -0.04);
+  arrow.lineTo(0.021, -0.037);
+  arrow.lineTo(0.014, -0.024);
+  arrow.lineTo(0.026, -0.024);
+  arrow.closePath();
+  const cursor = new THREE.Mesh(
+    new THREE.ShapeGeometry(arrow),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, depthTest: false }),
+  );
+  cursor.renderOrder = 2;
+  cursor.position.set(0.1, 0.5, 0.152);
+  group.add(cursor);
+
   const glow = new THREE.PointLight(0xa8ffb8, 2.2, 2.8, 2);
   glow.position.set(0, 0.49, 0.5);
   group.add(glow);
@@ -273,7 +294,7 @@ function buildMonitor(scene, screenTexture, yaw) {
   group.rotation.y = yaw;
   group.rotation.x = -0.06; // tilted back slightly toward the camera
   scene.add(group);
-  return { group, led, glow, screen };
+  return { group, led, glow, screen, cursor, screenSize: { w: 0.82, h: 0.461 }, screenCenter: new THREE.Vector3(0, 0.49, 0.147) };
 }
 
 function buildKeyboard(scene, x, z, yaw) {
@@ -287,6 +308,35 @@ function buildKeyboard(scene, x, z, yaw) {
   group.rotation.y = yaw;
   scene.add(group);
   return group;
+}
+
+// A mouse on a pad, to the right of the keyboard. The pad stays put; the mouse
+// group slides over it (see animate) and its top is where a front leg rests.
+function buildMouse(scene, x, z, yaw) {
+  const pad = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 0.006, 0.26),
+    standard(PALETTE.mousePad, { roughness: 0.95 }),
+  );
+  pad.position.set(x, 0.748, z);
+  pad.rotation.y = yaw;
+  scene.add(pad);
+
+  const group = new THREE.Group();
+  const shell = standard(PALETTE.mouse, { roughness: 0.7 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), shell);
+  body.scale.set(0.032, 0.02, 0.05);
+  body.position.set(0, 0.02, 0);
+  group.add(body);
+  // Button split and a scroll wheel, so the shape reads as a mouse from the home camera.
+  group.add(box(0.002, 0.004, 0.028, standard(PALETTE.keys, { roughness: 0.9 }), 0, 0.037, -0.022));
+  group.add(box(0.007, 0.006, 0.01, standard(PALETTE.keys, { roughness: 0.9 }), 0, 0.037, -0.012));
+  const cable = segment(new THREE.Vector3(0, 0.018, -0.045), new THREE.Vector3(0.03, 0.005, -0.16), 0.003, standard(PALETTE.keys));
+  group.add(cable);
+  group.position.set(x, 0.751, z);
+  group.rotation.y = yaw;
+  group.scale.setScalar(1.35);
+  scene.add(group);
+  return { group, pad, home: new THREE.Vector3(x, 0.751, z), yaw, top: new THREE.Vector3(0, 0.04 * 1.35, -0.012 * 1.35) };
 }
 
 // ---------------------------------------------------------------------------
@@ -505,8 +555,12 @@ export function startScene(canvas) {
   const monitorPos = new THREE.Vector3(0.16, 0.745, -0.32);
   const monitor = buildMonitor(scene, screenTexture, monitorYaw);
   monitor.group.position.copy(monitorPos);
-  const keyboardPos = new THREE.Vector3(-0.02, 0, 0.1);
+  const keyboardPos = new THREE.Vector3(-0.12, 0, 0.1);
   buildKeyboard(scene, keyboardPos.x, keyboardPos.z, monitorYaw);
+  // The mouse sits to the keyboard's right (in the keyboard's own frame, so it follows the yaw).
+  const mouseOffset = new THREE.Vector3(0.32, 0, 0.2).applyAxisAngle(new THREE.Vector3(0, 1, 0), monitorYaw);
+  const mouse = buildMouse(scene, keyboardPos.x + mouseOffset.x, keyboardPos.z + mouseOffset.z, monitorYaw);
+  const scratch = { world: new THREE.Vector3(), local: new THREE.Vector3(), mouseXY: new THREE.Vector2() };
 
   const stoolPos = new THREE.Vector3(-0.16, 0, 0.56);
   buildStool(scene, stoolPos.x, stoolPos.z);
@@ -599,6 +653,7 @@ export function startScene(canvas) {
   let dragging = false;
 
   const anim = {
+    clickAt: -1, holdUntil: 0, wander: 0,
     t: 0,
     burstUntil: 0,       // wing flutter
     shudderUntil: 0,     // aversive twitch
@@ -649,13 +704,43 @@ export function startScene(canvas) {
     fly.head.rotation.x = 0.06 * Math.sin(t * 0.9);
     fly.group.rotation.z = shudder * 0.6;
 
-    // Front legs type on the keyboard.
+    // Mouse: wanders the pad on a slow Lissajous path, with a pause and a
+    // click (dip) on each new observation. The cursor mirrors it on the screen.
+    const clickAge = t - anim.clickAt;
+    const clicking = clickAge >= 0 && clickAge < 0.18;
+    if (t >= anim.holdUntil) anim.wander += dt;
+    const wander = anim.wander;
+    const mx = 0.075 * Math.sin(wander * 0.9) + 0.03 * Math.sin(wander * 2.3 + 1.0);
+    const mz = 0.05 * Math.sin(wander * 0.7 + 0.8) + 0.025 * Math.sin(wander * 1.7);
+    scratch.mouseXY.set(mx, mz);
+    scratch.local.set(mx, 0, mz).applyAxisAngle(UP, mouse.yaw);
+    mouse.group.position.copy(mouse.home).add(scratch.local);
+    mouse.group.rotation.y = mouse.yaw + 0.35 * mx;
+    // Screen coordinates: pad x -> screen x, pad z (toward the fly) -> screen down.
+    const sx = clamp(mx / 0.105, -1, 1) * monitor.screenSize.w * 0.46;
+    const sy = -clamp(mz / 0.075, -1, 1) * monitor.screenSize.h * 0.42;
+    monitor.cursor.position.set(monitor.screenCenter.x + sx, monitor.screenCenter.y + sy + 0.02, monitor.screenCenter.z + 0.005);
+    monitor.cursor.material.color.setHex(clicking ? PALETTE.acid : 0xffffff);
+
+    // Front legs: the left one types on the keyboard, the right one holds the mouse.
     fly.legs.forEach((leg) => {
       if (leg.index !== 0) return;
-      const phase = leg.side > 0 ? 0 : Math.PI;
-      const lift = Math.max(0, Math.sin(t * 6 + phase)) * 0.025;
-      leg.foot.copy(leg.restFoot).setY(leg.restFoot.y + lift);
-      leg.knee.copy(leg.restKnee).setY(leg.restKnee.y + lift * 0.5);
+      if (leg.side > 0) {
+        // Foot on the mouse's top, converted into the fly's frame; a dip when it clicks.
+        scratch.world.copy(mouse.top).applyAxisAngle(UP, mouse.group.rotation.y).add(mouse.group.position);
+        if (clicking) scratch.world.y -= 0.006;
+        fly.group.updateWorldMatrix(false, false);
+        fly.group.worldToLocal(scratch.world);
+        leg.foot.copy(scratch.world);
+        // Knee: above the midpoint, pushed outward so the leg bends like the resting pose.
+        leg.knee.lerpVectors(leg.hip, leg.foot, 0.5);
+        leg.knee.y = Math.max(leg.hip.y, leg.foot.y) + 0.09;
+        leg.knee.x += 0.05;
+      } else {
+        const lift = Math.max(0, Math.sin(t * 6 + Math.PI)) * 0.025;
+        leg.foot.copy(leg.restFoot).setY(leg.restFoot.y + lift);
+        leg.knee.copy(leg.restKnee).setY(leg.restKnee.y + lift * 0.5);
+      }
       placeSegment(leg.femur, leg.hip, leg.knee);
       placeSegment(leg.tibia, leg.knee, leg.foot);
       leg.joint.position.copy(leg.knee);
@@ -814,7 +899,8 @@ export function startScene(canvas) {
 
   // Repaint the screen once the pixel font is available, if the page declared it.
   if (typeof document !== 'undefined' && document.fonts && typeof document.fonts.load === 'function') {
-    document.fonts.load('16px "Press Start 2P"').then(() => { lastKey = ''; paintMonitor(); if (!anim.running) kick(); }).catch(() => {});
+    Promise.all([document.fonts.load('16px "Press Start 2P"'), document.fonts.load('600 16px "Work Sans"')])
+      .then(() => { lastKey = ''; paintMonitor(); if (!anim.running) kick(); }).catch(() => {});
   }
 
   // --- public API -----------------------------------------------------------
@@ -837,6 +923,9 @@ export function startScene(canvas) {
       const first = anim.lastTick === null;
       anim.lastTick = tick;
       if (!first && anim.running) {
+        // The fly clicks: the mouse stops for a moment and the cursor blinks.
+        anim.clickAt = anim.t;
+        anim.holdUntil = anim.t + 0.9;
         if (neural.stimulus === 'reward') {
           anim.burstUntil = anim.t + 1.2;
           anim.flash = 1;
