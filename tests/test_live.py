@@ -193,8 +193,10 @@ def test_young_unknown_outcome_is_transient(live):
     player, chain, ledger, keypair = live
     chain.behaviour = "silent"
     player.rpc.confirm = lambda *a, **k: (_ for _ in ()).throw(Unconfirmed("sig"))
+    import time
+
     with pytest.raises(Unconfirmed):
-        player.deploy(plan(), now=5.0)
+        player.deploy(plan(), now=time.time())  # a fresh intent, not one from 1970
     # Nothing on chain yet and the intent is minutes old at most: wait, do not halt harder or resend.
     chain.statuses.clear()
     with pytest.raises(Transient):
