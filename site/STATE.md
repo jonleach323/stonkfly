@@ -83,6 +83,8 @@ with six decimals. Times are Unix seconds (floats). `null` means unknown.
     "group_hz": [36.156, … 21 values],  // mean rate of each tile's neuron group
     "excess_hz": [26.523, … 21 values], // rate minus that group's running average
     "median_excess_hz": 4.186,
+    "excess_rel": [2.76, … 21 values],   // (rate - average) / (average + 1 Hz): what the selection rule ranks
+    "median_excess_rel": 0.42,
     "brain_ms": 2500.0, "total_spikes": 615021, "reward_spikes": 0, "aversive_spikes": 125, "KC_spikes": 4376,
     "stimulus": "none" | "reward" | "aversive", "stimulus_ms": 0.0, "changed_edges": 1795,
     "stub": false, "compute_seconds": 4.8
@@ -94,7 +96,7 @@ with six decimals. Times are Unix seconds (floats). `null` means unknown.
   "last_outcomes": [ { "round_id": 55680, "won": true, "winning_tile": 9, "tiles": [...], "stake_usd": "0.94",
                        "refund_usd": "0.801", "sats": 247, "sats_usd": "0.190712", "btc_price": "77211.37",
                        "pnl_usd": "-0.008288", "simulated": true, "fee_bps": 600 } ],
-  "readout": { "model": "dn-21-group-adaptive-median-v2", "cells": 1342, "group_sizes": [64, …], "rule": "…", "validated": false } | null,
+  "readout": { "model": "dn-21-group-relative-median-v3", "cells": 1342, "group_sizes": [64, …], "rule": "…", "validated": false } | null,
   "model": { "connectome": "MaleCNS v1.0", "neurons": 166700, "retained_edges": 25582938, "readout": "…", "learning_validated": false },
   "policy": "…", "animation": "…", "learning_validated": false,
   "publication": { "frame_sha256": "…", "provenance_sha256": "…", "publish_error": null, "audit_sha256": "…" }

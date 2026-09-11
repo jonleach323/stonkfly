@@ -41,6 +41,18 @@ def test_adaptation_removes_a_constant_bias():
     biased[30:33] = 1  # group 11 becomes slightly more active than usual
     out = r.decode(biased, 0.5)
     assert out["tiles"] == [11] and out["excess_hz"][0] == pytest.approx(0, abs=1e-6)
+    assert out["excess_rel"][10] > out["median_excess_rel"]
+
+
+def test_relative_excess_ignores_a_global_ramp():
+    r, _ = readout(adaptation=2)
+    base = np.arange(1, 64, dtype=np.int32)  # groups differ in rate a lot
+    for _ in range(4):
+        r.decode(base, 0.5)
+    doubled = r.decode(base * 2, 0.5)  # every group doubles: a network-wide regime shift
+    # Every group's relative excess is (2b - EMA) / (EMA + 1); with equal history the
+    # spread should not simply reproduce the raw ranking [21, 20, 19, ...].
+    assert doubled["excess_rel"][20] < 2 * doubled["excess_rel"][0] + 1
     state = r.state()
     fresh, _ = readout(adaptation=2)
     fresh.load(state)

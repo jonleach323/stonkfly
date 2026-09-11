@@ -22,7 +22,7 @@ MODEL = {
     "connectome": "MaleCNS v1.0",
     "neurons": 166700,
     "retained_edges": 25582938,
-    "readout": "dn-21-group-adaptive-median-v2",
+    "readout": "dn-21-group-relative-median-v3",
     "learning_validated": False,
 }
 PROGRAM = "satRushGBRY2vgapeTAkoxz26vL2cYqyPi6CnBj7Tco"
@@ -167,6 +167,8 @@ def snapshot(out, now=None):
             "group_hz": n.get("group_hz") or [],
             "excess_hz": n.get("excess_hz") or [],
             "median_excess_hz": n.get("median_excess_hz"),
+            "excess_rel": n.get("excess_rel") or [],
+            "median_excess_rel": n.get("median_excess_rel"),
             "brain_ms": n.get("brain_ms"),
             "total_spikes": n.get("total_spikes"),
             "reward_spikes": n.get("reward_spikes"),

@@ -26,11 +26,11 @@ By default each round advances **500 ms of neural time** (about 5 s of wall time
 
 ## How neural spikes become a tile choice
 
-Every neuron whose annotated cell type starts with `DN` (descending neurons; 1,342 cells in this graph) is sorted by body ID and cut into 21 contiguous groups, one per tile. Each group keeps an exponential moving average of its own rate over about 20 observations, a stand-in for adaptation; without it the lowest-ID group fired at 36 Hz on every board and the same ten tiles were chosen every round. Over each observation:
+Every neuron whose annotated cell type starts with `DN` (descending neurons; 1,342 cells in this graph) is sorted by body ID and cut into 21 contiguous groups, one per tile. Each group keeps an exponential moving average of its own rate over about 20 observations, a stand-in for adaptation; without it the lowest-ID group fired at 36 Hz on every board and the same ten tiles were chosen every round. The excess is taken relative to that average because the whole network swings between quiet and active regimes, and a global ramp would otherwise reproduce the raw rate ranking for as long as the average lags. Over each observation:
 
 | Neural measurement | Proposal |
 | --- | --- |
-| Group rate minus its own running average, above the median of those excesses | Tile selected |
+| Group rate minus its own running average, divided by that average plus 1 Hz, above the median of those relative excesses | Tile selected |
 | Largest excess | Always selected |
 | Selection outside the configured tile-count bounds | Trimmed or extended by excess rank |
 
