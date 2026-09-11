@@ -10,7 +10,7 @@ When a round settles, a positive round result stimulates 15 identified PAM11 dop
 
 ## Run it
 
-Python 3.11, a C++17 compiler, macOS/Linux. Allow several GB for the dataset and dependencies; 16 GB RAM recommended.
+Python 3.11, a C++17 compiler, macOS/Linux. Measured needs: 1.7 GB RAM peak to build the graph, 1 GB while running, 1.6 GB of disk for the dataset, one CPU core (2 to 5 s per round on a 2.8 GHz core). 4 GB RAM and 5 GB free disk are comfortable.
 
 ```sh
 python3.11 -m venv .venv

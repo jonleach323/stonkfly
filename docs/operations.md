@@ -4,7 +4,7 @@ Use a dedicated wallet. Stonkfly is an experiment capable of losing its entire a
 
 ## Installation and data
 
-Use Python 3.11 and a C++17 compiler (`clang++`/`c++` on macOS, GCC or Clang on Linux). `python -m stonkfly prepare` downloads about 1.1 GB of upstream data, verifies it, and builds the full graph. `python -m stonkfly verify` independently checks prepared inputs. Set `STONKFLY_DATA` to use another data location.
+Use Python 3.11 and a C++17 compiler (`clang++`/`c++` on macOS, GCC or Clang on Linux). `python -m stonkfly prepare` downloads about 1.1 GB of upstream data, verifies it, and builds the full graph (about 2.5 minutes and 1.7 GB of RAM at peak; the running brain then uses about 1 GB and one core). `python -m stonkfly verify` independently checks prepared inputs. Set `STONKFLY_DATA` to use another data location.
 
 Existing DOOMFLY researchers can reuse verified local files with `python -m stonkfly prepare --reuse-doomfly /path/to/working-copy`.
 
