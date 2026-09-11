@@ -22,3 +22,4 @@ satrush-keypair.json
 *keypair*.json
 id.json
 *.partial
+*.log
