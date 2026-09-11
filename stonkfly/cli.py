@@ -34,6 +34,12 @@ def main():
     run.add_argument("--daily-deploys", type=int, default=300)
     run.add_argument("--priority-fee", type=int, default=0, help="Microlamports per compute unit")
     run.add_argument("--neural-ms", type=float, default=500)
+    run.add_argument("--publish", action="store_true", help="Upload public snapshots to Vercel Blob (BLOB_READ_WRITE_TOKEN)")
+    serve_cmd = sub.add_parser("serve", help="Serve the watch site locally from a run directory")
+    serve_cmd.add_argument("--out", type=Path, default=Path("runs/paper"))
+    serve_cmd.add_argument("--host", default="127.0.0.1")
+    serve_cmd.add_argument("--port", type=int, default=8787)
+    serve_cmd.add_argument("--network", choices=["mainnet", "devnet"], default="mainnet")
     status = sub.add_parser("status")
     status.add_argument("--out", type=Path, default=Path("runs/paper"))
     claim = sub.add_parser("claim", help="Move settled USDC and sats from the game to the wallet (live)")
@@ -76,6 +82,11 @@ def main():
         return
     if a.command == "claim":
         claim_winnings(a)
+        return
+    if a.command == "serve":
+        from .serve import serve
+
+        serve(a.out, a.host, a.port, a.network)
         return
     if a.live and (a.fixture or a.stub_brain):
         p.error("Live mode forbids fixtures and the stub brain")
@@ -167,10 +178,18 @@ def main():
         (out / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
         from .guard import Guard
         from .loop import GameLoop
+        from .publish import BlobPublisher, write_files
 
+        if a.publish:
+            token = os.environ.get("BLOB_READ_WRITE_TOKEN")
+            if not token:
+                raise RuntimeError("--publish requires BLOB_READ_WRITE_TOKEN in .env")
+            publisher = BlobPublisher(token, os.environ.get("STONKFLY_PUBLISH_PREFIX", "stonkfly"))
+        else:
+            publisher = write_files
         loop = GameLoop(
             settings, ledger, api, player, controller, Guard(settings, ledger, out / "STOP"), out,
-            settle_margin=0.2 if a.fixture else 3.0,
+            settle_margin=0.2 if a.fixture else 3.0, publisher=publisher,
         )
         loop.run(a.steps)
     except KeyboardInterrupt:

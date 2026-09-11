@@ -8,6 +8,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from .config import D
 from .display import board_frame
 from .guard import Veto
 from .reinforcement import reinforcement
@@ -18,7 +19,7 @@ SETTLE_MARGIN = 3.0
 class GameLoop:
     def __init__(
         self, settings, ledger, api, player, controller, guard, out,
-        clock=time.time, sleep=time.sleep, settle_margin=SETTLE_MARGIN,
+        clock=time.time, sleep=time.sleep, settle_margin=SETTLE_MARGIN, publisher=None,
     ):
         self.s = settings
         self.l = ledger
@@ -30,11 +31,23 @@ class GameLoop:
         self.clock = clock
         self.sleep = sleep
         self.settle_margin = settle_margin
+        self.publisher = publisher
 
     def stopped(self):
         return (self.out / "STOP").exists() or bool(self.l.get("halted"))
 
+    def heartbeat(self, phase):
+        self.l.put("status", {"phase": phase, "heartbeat": self.clock(), "running": True})
+
+    def publish(self):
+        if self.publisher is not None:
+            try:
+                self.publisher(self.out)
+            except Exception as e:  # Publication is observability, never control flow.
+                self.l.put("publish_error", type(e).__name__)
+
     def wait_for_next_round(self, board):
+        self.heartbeat("waiting for the round to settle")
         remaining = board.seconds_remaining(self.clock())
         if board.pending_activation or remaining is None or remaining > 300:
             remaining = 5.0
@@ -44,6 +57,7 @@ class GameLoop:
 
     def step(self):
         """Returns the event row when an observation happened, else None."""
+        self.heartbeat("reading the board")
         self.player.reconcile()
         board = self.api.board()
         now = self.clock()
@@ -71,6 +85,7 @@ class GameLoop:
             return None
         kind = self.l.get("stimulus") or "none"
         frame = board_frame(board, now)
+        self.heartbeat("simulating neurons")
         neural = self.controller.observe(frame, kind)
         self.l.put("stimulus", "none")
         slot = self.l.get("tick") % 2
@@ -83,6 +98,7 @@ class GameLoop:
             "stimulus": kind,
             "outcomes": outcomes,
             "readout_state": self.controller.readout.state(),
+            "board": board.summary(),
         }
         self.l.commit_tick(equity, info, observation)
         execution = {"status": "VETO", "reason": "unset"}
@@ -90,6 +106,7 @@ class GameLoop:
             plan = self.guard.plan(board, neural["tiles"], equity, self.player.available(board), self.clock())
             # Neural integration takes wall time; re-read the board before sending.
             self.guard.before_submit(plan, self.api.board())
+            self.heartbeat("deploying")
             execution = self.player.deploy(plan, self.clock())
         except Veto as e:
             execution = {"status": "VETO", "reason": str(e)}
@@ -99,10 +116,12 @@ class GameLoop:
             "round_id": board.round_id,
             "mode": self.player.mode,
             "equity_usdc": str(equity),
+            "in_play_usdc": str(sum(D(r["plan"]["stake_usd"]) for r in self.l.unsettled())),
             "stimulus": kind,
             "outcomes": outcomes,
             "neural": neural,
             "execution": execution,
+            "board": observation["board"],
         }
         with (self.out / "events.jsonl").open("a") as f:
             f.write(json.dumps(row, allow_nan=False) + "\n")
@@ -110,6 +129,7 @@ class GameLoop:
             os.fsync(f.fileno())
         Image.fromarray(frame).save(self.out / "latest-input.png")
         (self.out / "latest.json").write_text(json.dumps(row, indent=2) + "\n")
+        self.publish()
         print(
             json.dumps(
                 {
@@ -129,7 +149,11 @@ class GameLoop:
 
     def run(self, steps=0):
         count = 0
-        while (not steps or count < steps) and not self.stopped():
-            if self.step() is not None:
-                count += 1
+        try:
+            while (not steps or count < steps) and not self.stopped():
+                if self.step() is not None:
+                    count += 1
+        finally:
+            self.l.put("status", {"phase": "stopped", "heartbeat": self.clock(), "running": False})
+            self.publish()
         return count

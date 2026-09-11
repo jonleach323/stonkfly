@@ -76,6 +76,32 @@ class Board:
             return self.round_ends_at - now
         return self.slots_remaining * self.slot_ms / 1000 - (now - self.fetched_at)
 
+    def summary(self):
+        """JSON-safe public view of the board, as shown to the retina."""
+        previous = self.previous_round or {}
+        return {
+            "round_id": self.round_id,
+            "state": self.round_state,
+            "pending_activation": self.pending_activation,
+            "started_at": self.round_started_at,
+            "ends_at": self.round_ends_at,
+            "slots_remaining": None if self.pending_activation else self.slots_remaining,
+            "slot_ms": self.slot_ms,
+            "pot_usd": self.deployed_usd / 1e6,
+            "miners": self.miners_count,
+            "tile_stakes": [{"stake_usd": s / 1e6, "miners": c} for s, c in self.tile_stakes],
+            "previous_winners": [{"round_id": r, "tile": t} for r, t in self.previous_winners],
+            "previous_round": {
+                "round_id": previous.get("id"),
+                "winning_tile": None if previous.get("winning_tile") is None else int(previous["winning_tile"]) + 1,
+                "pot_sats": int(previous.get("deployed_btc_amount") or 0) or None,
+                "winners": previous.get("winners_count"),
+                "miners": previous.get("miners_count"),
+            } if previous else None,
+            "prices": {k: v for k, v in self.prices.items() if isinstance(v, (int, float))},
+            "fetched_at": self.fetched_at,
+        }
+
 
 def parse_board(data, fetched_at=None):
     if not isinstance(data, dict) or not isinstance(data.get("round_id"), int):
