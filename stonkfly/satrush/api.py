@@ -8,6 +8,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from ..errors import Transient
 from .rules import TILES
 
 USER_AGENT = "stonkfly/0.2 (+https://github.com/jonleach323/stonkfly)"
@@ -147,6 +148,10 @@ def http_json(url, timeout=20):
     return json.loads(body)
 
 
+class ApiError(Transient):
+    """The public API answered with something other than the expected document."""
+
+
 class SatRushApi:
     def __init__(self, base_url, fetch=http_json):
         self.base_url = base_url.rstrip("/")
@@ -158,11 +163,14 @@ class SatRushApi:
             url += "?" + urllib.parse.urlencode(query)
         payload = self.fetch(url)
         if not isinstance(payload, dict) or "data" not in payload:
-            raise RuntimeError("SatRush API answered without a data envelope")
+            raise ApiError("SatRush API answered without a data envelope")
         return payload["data"]
 
     def board(self):
-        return parse_board(self._get("/v1/board"))
+        try:
+            return parse_board(self._get("/v1/board"))
+        except (ValueError, TypeError, KeyError) as e:
+            raise ApiError(f"Malformed board: {type(e).__name__}") from e
 
     def config(self):
         return self._get("/v1/config")

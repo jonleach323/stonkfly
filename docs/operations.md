@@ -65,7 +65,7 @@ If the server already serves other subdomains, do not use the `https` profile (i
 
 Cloudflare's default cache does not store HTML or `/api/*` (the functions send `no-store` or `max-age=1`), so no page rule is needed. The page polls every two seconds; that is a few requests per viewer per second at most, well within the free plan.
 
-The dataset lives in the `data` volume (built once, about 1.6 GB) and run state in the `runs` volume; `docker compose down` keeps both, `docker compose down -v` deletes them. A halt (loss stop, unknown deploy outcome) exits the worker cleanly and it stays down until you review; see recovery below. `deploy/stonkfly-*.service` are systemd units for a bare-metal install with the same entrypoint.
+The dataset lives in the `data` volume (built once, about 1.6 GB) and run state in the `runs` volume; `docker compose down` keeps both, `docker compose down -v` deletes them. A halt (loss stop, unknown deploy outcome) exits the worker cleanly and it stays down until you review; see recovery below. Outages of the SatRush API or the RPC are not halts: the worker backs off (5 s doubling to 60 s), reports `retrying after …` as its phase on the watch page, and resumes on its own. `deploy/stonkfly-*.service` are systemd units for a bare-metal install with the same entrypoint.
 
 ## Watching a run
 

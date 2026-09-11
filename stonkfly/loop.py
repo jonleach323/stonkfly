@@ -1,19 +1,33 @@
 """One observation per round: see the board, pick tiles, deploy, wait, settle."""
 
 import hashlib
+import http.client
 import json
 import os
 import time
+import urllib.error
 from pathlib import Path
 
 from PIL import Image
 
 from .config import D
 from .display import board_frame
+from .errors import Transient
 from .guard import Veto
 from .reinforcement import reinforcement
 
 SETTLE_MARGIN = 3.0
+# The outside world not answering is never a reason to halt: wait and try again.
+TRANSIENT = (
+    Transient,
+    urllib.error.URLError,
+    TimeoutError,
+    ConnectionError,
+    http.client.HTTPException,
+    json.JSONDecodeError,
+)
+RETRY_BASE_S = 5.0
+RETRY_MAX_S = 60.0
 
 
 class GameLoop:
@@ -32,6 +46,7 @@ class GameLoop:
         self.sleep = sleep
         self.settle_margin = settle_margin
         self.publisher = publisher
+        self.failures = 0
 
     def stopped(self):
         return (self.out / "STOP").exists() or bool(self.l.get("halted"))
@@ -57,7 +72,31 @@ class GameLoop:
             self.sleep(min(1.0, max(until - self.clock(), 0.05)))
 
     def step(self):
-        """Returns the event row when an observation happened, else None."""
+        """Returns the event row when an observation happened, else None.
+
+        Transient failures (API, RPC, gateway pages) back off and retry without
+        halting; anything else propagates and halts the run for review.
+        """
+        try:
+            row = self._step()
+        except TRANSIENT as e:
+            self.failures += 1
+            delay = min(RETRY_MAX_S, RETRY_BASE_S * 2 ** min(self.failures - 1, 4))
+            self.l.put("status", {
+                "phase": f"retrying after {type(e).__name__}",
+                "heartbeat": self.clock(),
+                "running": True,
+                "failures": self.failures,
+            })
+            print(json.dumps({"retry": type(e).__name__, "attempt": self.failures, "in_seconds": delay}), flush=True)
+            until = self.clock() + delay
+            while self.clock() < until and not (self.out / "STOP").exists():
+                self.sleep(min(1.0, max(until - self.clock(), 0.05)))
+            return None
+        self.failures = 0
+        return row
+
+    def _step(self):
         self.heartbeat("reading the board")
         self.player.reconcile()
         board = self.api.board()

@@ -6,6 +6,7 @@ from decimal import Decimal
 from solders.pubkey import Pubkey
 
 from ..config import D
+from ..errors import Transient
 from . import program
 from .chain import Unconfirmed, build_transaction
 from .rules import (
@@ -174,7 +175,7 @@ class LivePlayer:
                     self.l.refund(rid)
                     resolved.append((rid, "FAILED"))
                 else:
-                    raise RuntimeError("Deploy outcome still unknown; wait and reconcile again")
+                    raise Transient("Deploy outcome still unknown; waiting to reconcile again")
         if resolved:
             self.l.put("halted", None) if self.l.get("halted") == "Unknown deploy outcome" else None
         return resolved

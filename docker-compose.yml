@@ -12,6 +12,9 @@ services:
       - runs:/runs
     restart: on-failure:10
     stop_grace_period: 90s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
     deploy:
       resources:
         limits:
@@ -28,6 +31,9 @@ services:
     depends_on:
       - worker
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
   # Optional automatic HTTPS: `docker compose --profile https up -d` with WATCH_DOMAIN set.
   caddy:

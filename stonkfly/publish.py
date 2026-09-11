@@ -61,10 +61,23 @@ def _read_meta(path):
     return meta, deployments
 
 
+TAIL_BYTES = 4 * 1024 * 1024
+
+
 def _read_events(path, limit=4000):
+    """The last `limit` events, reading only the file's tail: the log grows for months."""
     if not path.exists():
         return []
-    lines = path.read_text().splitlines()[-limit:]
+    with path.open("rb") as handle:
+        handle.seek(0, 2)
+        size = handle.tell()
+        start = max(0, size - TAIL_BYTES)
+        handle.seek(start)
+        chunk = handle.read()
+    text = chunk.decode("utf-8", errors="replace")
+    if start > 0:
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+    lines = text.splitlines()[-limit:]
     events = []
     for line in lines:
         try:

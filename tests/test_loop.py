@@ -74,3 +74,33 @@ def test_closing_round_is_skipped(world):
     assert clock.now == pytest.approx(1_063.0)  # brief poll, not a full-round wait
     assert loop.step() is not None and ledger.deployment(1001)["status"] == "PAPER"
     assert clock.now > 1_120.0  # after deploying, waited for that round to end
+
+
+def test_transient_api_failure_retries_without_halting(world):
+    import urllib.error
+
+    loop, ledger, clock, tmp = world
+    real = loop.api.board
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise urllib.error.URLError("api down")
+        return real()
+
+    loop.api.board = flaky
+    t0 = clock.now
+    assert loop.step() is None and ledger.get("halted") is None
+    assert ledger.get("status")["phase"] == "retrying after URLError" and loop.failures == 1
+    assert clock.now - t0 == pytest.approx(5.0, abs=1.1)  # first back-off
+    assert loop.step() is None and loop.failures == 2
+    assert loop.step() is not None and loop.failures == 0
+    assert ledger.deployment(1000)["status"] == "PAPER"  # the round the third step played
+
+
+def test_non_transient_errors_still_propagate(world):
+    loop, ledger, clock, tmp = world
+    loop.api.board = lambda: (_ for _ in ()).throw(RuntimeError("ledger corrupt"))
+    with pytest.raises(RuntimeError):
+        loop.step()

@@ -242,3 +242,16 @@ def test_local_server_routes(run_dir, tmp_path):
         server.shutdown()
         server.server_close()
         serve_module.SITE = original
+
+
+def test_events_tail_reads_only_the_end(tmp_path):
+    from stonkfly.publish import TAIL_BYTES, _read_events
+
+    path = tmp_path / "events.jsonl"
+    with path.open("w") as f:
+        for i in range(60_000):
+            f.write(json.dumps({"tick": i, "pad": "x" * 100}) + "\n")
+    assert path.stat().st_size > TAIL_BYTES
+    events = _read_events(path, limit=50)
+    assert [e["tick"] for e in events] == list(range(59_950, 60_000))
+    assert _read_events(path, limit=5)[0]["tick"] == 59_995

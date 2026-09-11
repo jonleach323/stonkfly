@@ -13,8 +13,11 @@ from solders.transaction import VersionedTransaction
 USER_AGENT = "stonkfly/0.2 (+https://github.com/jonleach323/stonkfly)"
 
 
-class RpcError(RuntimeError):
-    pass
+from ..errors import Transient
+
+
+class RpcError(Transient):
+    """An RPC call failed or was refused. Inside a deploy it is handled there; elsewhere it is retried."""
 
 
 class Unconfirmed(RuntimeError):

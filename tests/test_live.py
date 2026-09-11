@@ -88,6 +88,7 @@ def live(tmp_path):
     ledger = Ledger(tmp_path / "ledger.sqlite", settings, "live")
     api = FixtureApi(period=60.0, clock=lambda: 5.0)
     api.config = lambda: {**FixtureApi.config(api), "usd_mint": str(USDC), "btc_mint": str(BTC)}
+    api.user_deployments = lambda wallet, limit=10: []
     player = LivePlayer(settings, ledger, api, Rpc("fake", post=chain, sleep=lambda s: None), keypair)
     yield player, chain, ledger, keypair
     ledger.close()
@@ -184,3 +185,18 @@ def test_keypair_from_env_or_file(tmp_path):
     assert load_keypair(path, env={}).pubkey() == keypair.pubkey()
     with pytest.raises(FileNotFoundError):
         load_keypair(tmp_path / "none.json", env={})
+
+
+def test_young_unknown_outcome_is_transient(live):
+    from stonkfly.errors import Transient
+
+    player, chain, ledger, keypair = live
+    chain.behaviour = "silent"
+    player.rpc.confirm = lambda *a, **k: (_ for _ in ()).throw(Unconfirmed("sig"))
+    with pytest.raises(Unconfirmed):
+        player.deploy(plan(), now=5.0)
+    # Nothing on chain yet and the intent is minutes old at most: wait, do not halt harder or resend.
+    chain.statuses.clear()
+    with pytest.raises(Transient):
+        player.reconcile()
+    assert ledger.deployment(1000)["status"] == "UNKNOWN" and not chain.sent[1:]
