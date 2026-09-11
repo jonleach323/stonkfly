@@ -36,6 +36,9 @@ case "${1:-worker}" in
     mkdir -p "$OUT"
     exec python -m stonkfly serve --out "$OUT" --host 0.0.0.0 --port "${STONKFLY_WATCH_PORT:-8787}" --network "$NETWORK"
     ;;
+  sh|bash|python|python3|cat)
+    exec "$@"
+    ;;
   *)
     exec python -m stonkfly "$@"
     ;;

@@ -42,6 +42,8 @@ def main():
     serve_cmd.add_argument("--network", choices=["mainnet", "devnet"], default="mainnet")
     status = sub.add_parser("status")
     status.add_argument("--out", type=Path, default=Path("runs/paper"))
+    keygen = sub.add_parser("keygen", help="Create a new dedicated Solana keypair file (never reuse a personal wallet)")
+    keygen.add_argument("--out", type=Path, default=Path("satrush-keypair.json"))
     claim = sub.add_parser("claim", help="Move settled USDC and sats from the game to the wallet (live)")
     claim.add_argument("--network", choices=["mainnet", "devnet"], default="mainnet")
     claim.add_argument("--out", type=Path, default=Path("runs/live"))
@@ -79,6 +81,9 @@ def main():
                 indent=2,
             )
         )
+        return
+    if a.command == "keygen":
+        print(json.dumps(keygen_file(a.out)), flush=True)
         return
     if a.command == "claim":
         claim_winnings(a)
@@ -215,6 +220,26 @@ def main():
     finally:
         ledger.close()
         lock.close()
+
+
+def keygen_file(path):
+    """Write a fresh keypair (solana-keygen format, mode 600) and report only its public address."""
+    from solders.keypair import Keypair
+
+    path = Path(path)
+    if path.exists():
+        raise SystemExit(f"{path} exists; refusing to overwrite a keypair")
+    keypair = Keypair()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(json.dumps(list(bytes(keypair))) + "\n")
+    return {
+        "address": str(keypair.pubkey()),
+        "file": str(path),
+        "next": "Fund this address with at most 100 USDC and about 0.02 SOL. Keep the file private; "
+        "for Docker put its contents in SATRUSH_KEYPAIR_JSON in .env.",
+    }
 
 
 def paper_player(settings, ledger, api):
