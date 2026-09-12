@@ -9,21 +9,12 @@
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 
-const CLASS_COLORS = [
-  [0.30, 0.34, 0.46], // other
-  [0.36, 0.52, 0.86], // optic lobe
-  [0.62, 0.48, 0.92], // central brain
-  [0.34, 0.62, 0.62], // nerve cord
-  [1.00, 0.82, 0.29], // retina
-  [0.74, 1.00, 0.20], // KC
-  [1.00, 0.54, 0.24], // MBON
-  [1.00, 0.29, 0.47], // dopamine
-  [1.00, 1.00, 1.00], // DN
-];
-// Dense classes (thousands of cells packed in a small volume) are drawn dimmer so they do not wash out.
-const CLASS_WEIGHT = [0.5, 0.35, 0.6, 0.6, 0.45, 0.35, 1.0, 1.0, 0.8];
+// One tone for every cell; brightness is activity. Resting cells are a cool
+// grey, spiking cells go to a warm white, like an activity map.
+const REST = [0.42, 0.46, 0.52];
+const LIT = [1.0, 0.96, 0.82];
 const BINS_PER_SECOND = 20;  // 50 ms slices at real time: 500 ms of neural time replays in 500 ms
-const HOLD_SECONDS = 0.9;    // pause on the afterglow before the replay restarts
+const HOLD_SECONDS = 0.4;    // pause on the afterglow before the replay restarts
 
 function readAtlas(buffer) {
   const view = new DataView(buffer);
@@ -78,8 +69,8 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
   let lastT = 0;
   let replayT = 0;      // seconds into the replay cycle
   let lastBin = -1;
-  let yaw = 0.6;
-  let pitch = 0.05;
+  let yaw = 0;
+  let pitch = 0;
   let dragYaw = 0;
   let dragPitch = 0;
   let dragging = null;
@@ -97,31 +88,39 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
       positions[i * 3] = atlas.xyz[i * 3] / 1000;
       positions[i * 3 + 1] = -atlas.xyz[i * 3 + 1] / 1000;
       positions[i * 3 + 2] = atlas.xyz[i * 3 + 2] / 1000;
-      const k = Math.min(atlas.cls[i], CLASS_COLORS.length - 1);
-      const c = CLASS_COLORS[k];
-      const w = CLASS_WEIGHT[k];
-      base[i * 3] = c[0] * w; base[i * 3 + 1] = c[1] * w; base[i * 3 + 2] = c[2] * w;
+      base[i * 3] = REST[0]; base[i * 3 + 1] = REST[1]; base[i * 3 + 2] = REST[2];
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
     const material = new THREE.PointsMaterial({
-      size: 1.8, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.7,
-      blending: THREE.AdditiveBlending, depthWrite: false,
+      size: 1.7, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false,
     });
     points = new THREE.Points(geometry, material);
     pivot.add(points);
     // Long axis (brain to nerve cord) runs along z in the dataset, brain at low z: stand it up, brain on top.
     pivot.rotation.set(0, 0, 0);
     points.rotation.x = Math.PI / 2;
-    // Fit the camera to the cloud.
-    geometry.computeBoundingSphere();
-    const r = geometry.boundingSphere ? geometry.boundingSphere.radius : 30;
-    camera.position.set(0, 0, r * 2.7);
-    camera.near = Math.max(0.5, r * 0.05);
-    camera.far = r * 8;
-    camera.updateProjectionMatrix();
+    geometry.computeBoundingBox();
+    extents = geometry.boundingBox;
+    fit();
     paintBin(-1);
+  }
+
+  // Place the camera so the whole cloud fits the canvas with a margin, whatever its aspect.
+  let extents = null;
+  function fit() {
+    if (!extents) return;
+    // After the stand-up rotation, dataset z is vertical and dataset y is depth.
+    const halfW = Math.max(Math.abs(extents.min.x), Math.abs(extents.max.x));
+    const halfH = Math.max(Math.abs(extents.min.z), Math.abs(extents.max.z));
+    const depth = Math.max(Math.abs(extents.min.y), Math.abs(extents.max.y));
+    const tanV = Math.tan((camera.fov / 2) * Math.PI / 180);
+    const d = Math.max(halfH / tanV, halfW / (tanV * camera.aspect)) * 1.12 + depth;
+    camera.position.set(0, 0, d);
+    camera.near = Math.max(0.5, d * 0.05);
+    camera.far = d * 4;
+    camera.updateProjectionMatrix();
   }
 
   function totals() {
@@ -150,11 +149,12 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
     const have = activity && activity.n === n && bin >= 0 && bin < activity.bins;
     for (let i = 0; i < n; i += 1) {
       const hit = have ? Math.min(1, activity.counts[bin * n + i] / 2) : 0;
-      energy[i] = Math.max(energy[i] * 0.55, hit);
-      const k = 0.16 + 1.6 * energy[i];
-      colors[i * 3] = base[i * 3] * k;
-      colors[i * 3 + 1] = base[i * 3 + 1] * k;
-      colors[i * 3 + 2] = base[i * 3 + 2] * k;
+      energy[i] = Math.max(energy[i] * 0.6, hit);
+      const e = energy[i];
+      const dim = 0.55 + 0.45 * e; // resting grey stays visible, lit cells go warm white
+      colors[i * 3] = (base[i * 3] + (LIT[0] - base[i * 3]) * e) * dim;
+      colors[i * 3 + 1] = (base[i * 3 + 1] + (LIT[1] - base[i * 3 + 1]) * e) * dim;
+      colors[i * 3 + 2] = (base[i * 3 + 2] + (LIT[2] - base[i * 3 + 2]) * e) * dim;
     }
     points.geometry.attributes.color.needsUpdate = true;
     drawRaster(bin);
@@ -202,6 +202,7 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
+      fit();
     }
     return true;
   }
@@ -213,7 +214,8 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
     const t = nowMs / 1000;
     const dt = lastT ? Math.min(0.05, t - lastT) : 0.016;
     lastT = t;
-    if (!reduced) yaw += dt * 0.12;
+    // A still frontal view with the faintest sway, so it reads as a volume without spinning.
+    if (!reduced) yaw = 0.08 * Math.sin(t * 0.25);
     pivot.rotation.y = yaw + dragYaw;
     pivot.rotation.x = pitch + dragPitch;
     if (activity && atlas && activity.n === atlas.n) {

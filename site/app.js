@@ -677,6 +677,11 @@ function b64bytes(text) {
 function renderReplay(s) {
   const pub = s.publication || {};
   setChip("replay-chip", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)} UTC`, "");
+  const model = s.model || {};
+  setText("replay-count", `${fmtInt(model.neurons ?? NEURONS_DEFAULT)} neurons`);
+  const edges = num(model.edges ?? model.connections);
+  const dn = s.readout && num(s.readout.cells);
+  setText("replay-sub", `${edges === null ? "25.6M" : edges >= 1e6 ? `${(edges / 1e6).toFixed(1)}M` : fmtInt(edges)} connections${dn ? ` · ${fmtInt(dn)} descending neurons` : ""}`);
   if (!app.brain) { loadBrain(); return; }
   const atlasSha = DEMO ? (DEMO.atlas ? "demo" : null) : pub.atlas_sha256 || null;
   if (atlasSha && atlasSha !== app.atlasSha && !app.atlasLoading) {
@@ -690,7 +695,7 @@ function renderReplay(s) {
     load.then(([buffer, meta]) => {
       app.atlasSha = atlasSha;
       safe(() => app.brain.setAtlas(buffer, meta));
-      if (meta && meta.n) setText("replay-note", `${fmtInt(meta.n)} of ${fmtInt(meta.of)} simulated cells at their soma positions, lit by their spikes over ${fmtInt((s.settings && s.settings.neural_ms) || 500)} ms of neural time, replayed at real time. A model, not a recording.`);
+      if (meta && meta.n) setText("replay-note", `${fmtInt(meta.n)} of ${fmtInt(meta.of)} simulated cells at their soma positions, lit as they spike over ${fmtInt((s.settings && s.settings.neural_ms) || 500)} ms of neural time, replayed at real time. A model, not a recording.`);
       if (app.activityPending) { const b = app.activityPending; app.activityPending = null; safe(() => app.brain.setActivity(b)); }
     }).catch((e) => console.warn("atlas unavailable:", e && e.message ? e.message : e)).finally(() => { app.atlasLoading = false; });
   }

@@ -1,14 +1,14 @@
-"""A fixed subsample of neurons with positions, for the page's neural replay.
+"""A fixed subsample of neurons with positions, for the page's neural activity view.
 
-The page draws the brain as a point cloud that lights up with the spikes of
-each observation. Drawing all 166,700 cells every round would be a megabyte
-a minute, so a fixed subsample of about 16,000 is chosen once per run, with
-a seeded RNG: every Kenyon cell, MBON, dopamine cell and readout descending
-neuron, every photoreceptor, and a random sample of the rest in proportion.
-Positions are the annotated soma locations (or the nearest point to the
-soma). Photoreceptors have no soma in the dataset, so they are placed on a
-disc by their eye coordinate, beside the right optic lobe. Per observation
-the spikes of these cells are binned into BINS slices of neural time.
+The page draws the central nervous system as a point cloud that lights up
+with the spikes of each observation. Drawing all 166,700 cells every round
+would be a megabyte a minute, so a fixed subsample of about 16,000 is chosen
+once per run with a seeded RNG: every readout descending neuron (the raster
+needs them) and a uniform random sample of every other cell that has an
+annotated soma, so the silhouette of the brain, its optic lobes and the
+nerve cord reads as it does in the dataset. Positions are the annotated soma
+locations (or the nearest point to the soma). Per observation the spikes of
+these cells are binned into BINS slices of neural time.
 
 This is a picture of simulated activity in an approximate model, not a
 recording of a fly. Nothing here feeds back into the game.
@@ -82,29 +82,11 @@ def build(ids, xyz, superclass, side, circuit, readout_groups, retina, uv, targe
     cls[kc] = 5
     cls[dan] = 7
 
-    # Photoreceptors: a disc by the right optic lobe, laid out by eye coordinate.
     retina = np.asarray(retina, dtype=np.int64)
-    uv = np.asarray(uv, dtype=np.float64)
-    ol_right = np.flatnonzero((cls == 1) & (side == "R") & np.isfinite(xyz).all(axis=1))
-    if len(ol_right) < 10:
-        ol_right = np.flatnonzero((cls == 1) & np.isfinite(xyz).all(axis=1))
-    finite = np.isfinite(xyz).all(axis=1)
-    if len(ol_right) and finite.any():
-        centre = np.median(xyz[ol_right], axis=0)
-        span = np.percentile(xyz[ol_right], 90, axis=0) - np.percentile(xyz[ol_right], 10, axis=0)
-        outward = 1.0 if centre[0] >= np.median(xyz[finite, 0]) else -1.0
-        eye = centre.copy()
-        eye[0] += outward * 0.6 * max(span[0], 1.0)
-        radius = 0.45 * max(span[1], span[2], 1.0)
-        u = (uv[:, 0] - 0.5) * 2
-        v = (uv[:, 1] - 0.5) * 2
-        xyz[retina, 0] = eye[0] + outward * 0.15 * radius * (1 - (u * u + v * v) / 2)
-        xyz[retina, 1] = eye[1] + radius * u
-        xyz[retina, 2] = eye[2] + radius * v
     cls[retina] = 4
     finite = np.isfinite(xyz).all(axis=1)
 
-    required = np.unique(np.r_[kc, mb, dan, retina, np.flatnonzero(group > 0)])
+    required = np.flatnonzero(group > 0)  # the readout cells, for the raster; everything else is a uniform sample
     required = required[finite[required]]
     rng = np.random.default_rng(seed)
     rest = np.setdiff1d(np.flatnonzero(finite), required)
@@ -131,7 +113,7 @@ def build(ids, xyz, superclass, side, circuit, readout_groups, retina, uv, targe
             "class_counts": {CLASSES[i]: int(c) for i, c in enumerate(counts)},
             "bins": BINS,
             "seed": int(seed),
-            "positions": "annotated soma locations (MaleCNS v1.0), scaled to a 60,000-unit cube; photoreceptors placed on a disc by eye coordinate beside the right optic lobe",
+            "positions": "annotated soma locations (MaleCNS v1.0), scaled to a 60,000-unit cube; cells without a soma location (photoreceptors among them) are not drawn",
             "note": "Simulated activity of an approximate model on a fixed subsample; not a recording of a fly.",
         },
     }
