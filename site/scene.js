@@ -374,28 +374,36 @@ function buildSkyline(scene) {
 // Set dressing.
 
 function buildRoom(scene) {
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), standard(0xffffff, { map: floorTexture(), roughness: 0.95 }));
+  // The room stops at the glass wall (x = -3.2) and the back wall (z = -1.9):
+  // neither the floor nor the back wall continues outside, so through the
+  // glass there is only the city, down to the towers' feet.
+  const floorTex = floorTexture();
+  floorTex.repeat.set(10.2, 8.9);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(10.2, 8.9), standard(0xffffff, { map: floorTex, roughness: 0.95 }));
   floor.rotation.x = -Math.PI / 2;
+  floor.position.set(1.9, 0, 2.55);
   scene.add(floor);
+  // A slab under the floor, so the platform has an edge when seen from the glass.
+  scene.add(box(10.2, 0.4, 8.9, standard(0x0a0b10, { roughness: 1 }), 1.9, -0.2, 2.55));
 
   const wallMaterial = standard(PALETTE.wall, { roughness: 1 });
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(14, 5), wallMaterial);
-  back.position.set(0, 2.5, -1.9);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(10.2, 5), wallMaterial);
+  back.position.set(1.9, 2.5, -1.9);
   scene.add(back);
 
   // The whole left wall (x = -3.2, z -3..5, floor to ceiling) is glass onto the city:
   // one pane with slim posts only at the corners.
   const frame = standard(0x14161d, { roughness: 0.6, metalness: 0.3 });
-  scene.add(box(0.1, 5, 0.1, frame, -3.2, 2.5, -3));
+  scene.add(box(0.1, 5, 0.1, frame, -3.2, 2.5, -1.9));
   scene.add(box(0.1, 5, 0.1, frame, -3.2, 2.5, 5));
-  scene.add(box(0.14, 0.06, 8, frame, -3.2, 0.03, 1)); // floor track
-  scene.add(box(0.14, 0.06, 8, frame, -3.2, 4.97, 1)); // ceiling track
+  scene.add(box(0.14, 0.06, 6.9, frame, -3.2, 0.03, 1.55)); // floor track
+  scene.add(box(0.14, 0.06, 6.9, frame, -3.2, 4.97, 1.55)); // ceiling track
   const glass = new THREE.Mesh(
-    new THREE.PlaneGeometry(8, 5),
+    new THREE.PlaneGeometry(6.9, 5),
     new THREE.MeshStandardMaterial({ color: 0x9db4ff, transparent: true, opacity: 0.05, roughness: 0.1, metalness: 0.5, depthWrite: false }),
   );
   glass.rotation.y = Math.PI / 2;
-  glass.position.set(-3.2, 2.5, 1);
+  glass.position.set(-3.2, 2.5, 1.55);
   scene.add(glass);
 
   const skyline = buildSkyline(scene);
