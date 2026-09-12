@@ -829,7 +829,7 @@ export function startScene(canvas) {
 
   // --- orbit ----------------------------------------------------------------
   const target = new THREE.Vector3(-0.3, 0.82, 0.12);
-  const orbit = { home: 0.68, drag: 0, sway: 0, velocity: 0, radius: 3.05, elevation: 0.25 };
+  const orbit = { home: 1.0, drag: 0, sway: 0, velocity: 0, radius: 3.05, elevation: 0.25 };
   function clampDrag() {
     if (orbit.drag < ORBIT_MIN) { orbit.drag = ORBIT_MIN; orbit.velocity = 0; }
     if (orbit.drag > ORBIT_MAX) { orbit.drag = ORBIT_MAX; orbit.velocity = 0; }
@@ -864,6 +864,10 @@ export function startScene(canvas) {
       height = h;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
+      // Keep the horizontal field of view of the default aspect, so a narrow
+      // canvas (a phone) shows the same width of the room, taller.
+      const halfH = Math.tan((32 / 2) * Math.PI / 180) * DEFAULT_ASPECT;
+      camera.fov = camera.aspect < DEFAULT_ASPECT ? 2 * Math.atan(halfH / camera.aspect) * 180 / Math.PI : 32;
       camera.updateProjectionMatrix();
       if (post) post.target.setSize(w, h);
     }

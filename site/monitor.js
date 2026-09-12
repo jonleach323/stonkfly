@@ -46,23 +46,25 @@ const RAIL_X = MONITOR_WIDTH - PAD - RAIL_W; // 702
 const BOARD_W = RAIL_X - PAD - 18;           // 662
 const FOOTER_Y = 494;
 
-// Honeycomb: pointy-top hexagons in staggered rows of 5-6-5-5 (21), like the real board.
-const HEX_R = 50;                         // circumradius
-const HEX_W = Math.sqrt(3) * HEX_R;       // 86.6
-const HEX_ROW = HEX_R * 1.5 + 2;          // 77: row pitch, with a little air
-const HEX_ROWS = [5, 6, 5, 5];
-const HEX_TOP = BOARD_TOP + HEX_R + 8;
+// Honeycomb: pointy-top hexagons in three staggered rows of 7. Adjacent rows
+// are offset by half a cell, so the cells interlock instead of overlapping.
+const HEX_R = 48;                         // circumradius
+const HEX_W = Math.sqrt(3) * HEX_R;       // 83.1
+const HEX_CELL = HEX_W + 3;               // horizontal pitch, with a little air
+const HEX_ROW = HEX_R * 1.5 + 3;          // 75: row pitch
+const HEX_ROWS = [7, 7, 7];
+const HEX_TOP = (BOARD_TOP + FOOTER_Y) / 2 - HEX_ROW; // three rows centred in the board area
 
 function hexCenters() {
   const centers = [];
-  const widest = Math.max(...HEX_ROWS);
-  const left = PAD + (BOARD_W - widest * (HEX_W + 3)) / 2; // centre the widest row in the board area
+  const span = (Math.max(...HEX_ROWS) + 0.5) * HEX_CELL; // the stagger adds half a cell
+  const left = PAD + (BOARD_W - span) / 2;
   let tile = 0;
   HEX_ROWS.forEach((count, row) => {
-    const offset = (widest - count) * (HEX_W + 3) / 2;
+    const offset = row % 2 ? HEX_CELL / 2 : 0;
     for (let i = 0; i < count; i += 1) {
       tile += 1;
-      centers.push({ tile, x: left + offset + (i + 0.5) * (HEX_W + 3), y: HEX_TOP + row * HEX_ROW });
+      centers.push({ tile, x: left + offset + (i + 0.5) * HEX_CELL, y: HEX_TOP + row * HEX_ROW });
     }
   });
   return centers;
