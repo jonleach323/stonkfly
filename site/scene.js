@@ -161,9 +161,10 @@ function posterTexture() {
 }
 
 // ---------------------------------------------------------------------------
-// The city outside: low-poly towers with lit windows, a gradient sky, a moon.
-// Everything here opts out of the room fog and is tinted by row instead, so the
-// far towers read as distance without dissolving into the background.
+// The city. There is no room: the desk sits on a platform and huge low-poly
+// towers stand close on the left and behind it, rising from far below to past
+// the top of the frame, with sparse coloured windows and streaks of falling
+// light. Everything here opts out of the room fog and is tinted by distance.
 
 function seeded(seed) {
   let a = seed >>> 0;
@@ -176,20 +177,28 @@ function seeded(seed) {
   };
 }
 
-// A tile of windows; some lit warm, some cool, most dark. Used as colour and emissive map.
-function windowTexture(rand, lit) {
+const WINDOW_COLORS = ['#ff6f9c', '#5ef2e0', '#e8f0ff', '#8fffc4'];
+
+// A tile of a dark facade: faint vertical bands and a few small lit windows.
+function facadeTexture(rand, lit) {
   const c = document.createElement('canvas');
-  c.width = 16;
-  c.height = 32;
+  c.width = 32;
+  c.height = 64;
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, 16, 32);
-  for (let y = 1; y < 32; y += 4) {
-    for (let x = 1; x < 16; x += 4) {
+  ctx.fillRect(0, 0, 32, 64);
+  ctx.fillStyle = '#0a0c14';
+  for (let x = 0; x < 32; x += 8) ctx.fillRect(x, 0, 3, 64);
+  for (let y = 2; y < 64; y += 4) {
+    for (let x = 1; x < 32; x += 4) {
       const r = rand();
-      if (r < lit) ctx.fillStyle = r < lit * 0.7 ? '#ffd493' : '#a9d6ff';
-      else ctx.fillStyle = r < lit + 0.08 ? '#2a2c38' : '#101218';
-      ctx.fillRect(x, y, 2, 2);
+      if (r < lit) {
+        ctx.fillStyle = WINDOW_COLORS[Math.floor(rand() * WINDOW_COLORS.length)];
+        ctx.fillRect(x, y, 1, 2);
+      } else if (r < lit + 0.12) {
+        ctx.fillStyle = '#1a1e2c';
+        ctx.fillRect(x, y, 1, 2);
+      }
     }
   }
   const tex = new THREE.CanvasTexture(c);
@@ -197,7 +206,7 @@ function windowTexture(rand, lit) {
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
   return tex;
 }
 
@@ -207,12 +216,9 @@ function skyTexture() {
   c.height = 64;
   const ctx = c.getContext('2d');
   const g = ctx.createLinearGradient(0, 0, 0, 64);
-  // Top of the plane is y 32, bottom y -8: the glow sits at the horizon (y 0..3), the room's eye level.
-  g.addColorStop(0, '#07070f');
-  g.addColorStop(0.35, '#1c1740');
-  g.addColorStop(0.62, '#3a1a50');
-  g.addColorStop(0.88, '#5a2458');
-  g.addColorStop(1, '#6e2c5c');
+  g.addColorStop(0, '#04050a');
+  g.addColorStop(0.7, '#0a0b18');
+  g.addColorStop(1, '#1b1130');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 4, 64);
   const tex = new THREE.CanvasTexture(c);
@@ -221,138 +227,144 @@ function skyTexture() {
 }
 
 function buildSkyline(scene) {
-  const rand = seeded(20260911);
+  const rand = seeded(20260912);
   const group = new THREE.Group();
 
-  const sky = new THREE.Mesh(new THREE.PlaneGeometry(120, 40), new THREE.MeshBasicMaterial({ map: skyTexture(), fog: false }));
-  sky.position.set(0, 12, -34);
-  group.add(sky);
+  // Sky: two dark gradient walls, far behind and far left.
+  const skyMaterial = new THREE.MeshBasicMaterial({ map: skyTexture(), fog: false });
+  const skyBack = new THREE.Mesh(new THREE.PlaneGeometry(260, 140), skyMaterial);
+  skyBack.position.set(0, 30, -90);
+  group.add(skyBack);
+  const skyLeft = new THREE.Mesh(new THREE.PlaneGeometry(260, 140), skyMaterial);
+  skyLeft.rotation.y = Math.PI / 2;
+  skyLeft.position.set(-90, 30, 0);
+  group.add(skyLeft);
 
-  // Stars: a sparse field above the horizon.
-  const starPositions = [];
-  for (let i = 0; i < 160; i += 1) starPositions.push(-50 + rand() * 100, 6 + rand() * 16, -33.5);
-  const stars = new THREE.Points(
-    new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3)),
-    new THREE.PointsMaterial({ color: 0xc9d4ff, size: 0.14, fog: false, sizeAttenuation: true }),
-  );
-  group.add(stars);
-
-  const moon = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 1), new THREE.MeshBasicMaterial({ color: 0xe9e4d2, fog: false }));
-  moon.position.set(-14, 8.5, -32);
-  group.add(moon);
-
-  const textures = [windowTexture(rand, 0.22), windowTexture(rand, 0.3), windowTexture(rand, 0.16), windowTexture(rand, 0.26)];
-  const rows = [
-    { z: -6.5, tint: 0x232a3d, glow: 1.0, count: 9, hMin: 2.0, hMax: 5.5, gap: 1.4 },
-    { z: -10, tint: 0x1a1f30, glow: 0.75, count: 12, hMin: 3.0, hMax: 8.0, gap: 1.0 },
-    { z: -15, tint: 0x141726, glow: 0.5, count: 16, hMin: 3.5, hMax: 10.5, gap: 0.6 },
+  const textures = [facadeTexture(rand, 0.05), facadeTexture(rand, 0.08), facadeTexture(rand, 0.035), facadeTexture(rand, 0.065)];
+  const ground = -28;
+  // Two rings of towers around the platform's left and back edges; the outer
+  // ring is taller and darker. Each entry: distance band from the platform.
+  const rings = [
+    { near: 8, far: 12, tint: 0x171c2e, glow: 1.0, wMin: 2.2, wMax: 5.5, hMin: 40, hMax: 58, gap: 1.2 },
+    { near: 14, far: 22, tint: 0x0f1322, glow: 0.7, wMin: 3.5, wMax: 8, hMin: 52, hMax: 80, gap: 1.6 },
   ];
-  const ground = -4; // the room is high up: most rooftops sit near eye level, towers rise above
-  rows.forEach((row) => {
-    let x = -16 + rand() * 1.5;
-    for (let i = 0; i < row.count && x < 17; i += 1) {
-      const w = 0.6 + rand() * 1.2;
-      const d = 0.8 + rand() * 1.4;
-      const h = row.hMin + rand() * (row.hMax - row.hMin);
-      const tex = textures[Math.floor(rand() * textures.length)].clone();
-      tex.repeat.set(Math.max(1, Math.round(w / 0.42)), Math.max(1, Math.round(h / 0.84)));
-      tex.needsUpdate = true;
-      const material = new THREE.MeshStandardMaterial({
-        color: row.tint, map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: row.glow,
-        roughness: 0.9, metalness: 0.05, fog: false,
-      });
-      const tower = box(w, h, d, material, x + w / 2, ground + h / 2, row.z + (rand() - 0.5) * 1.2);
-      group.add(tower);
-      const r = rand();
-      if (r < 0.3) {
-        // Setback: a narrower block on top.
-        const w2 = w * (0.45 + rand() * 0.3);
-        const h2 = h * (0.15 + rand() * 0.25);
-        group.add(box(w2, h2, d * 0.7, material, tower.position.x, ground + h + h2 / 2, tower.position.z));
-      } else if (r < 0.5) {
-        // Pyramid cap.
-        const cap = new THREE.Mesh(new THREE.ConeGeometry(Math.min(w, d) * 0.62, 0.5 + rand() * 0.8, 4), standard(row.tint, { fog: false, flatShading: true }));
-        cap.position.set(tower.position.x, ground + h + cap.geometry.parameters.height / 2, tower.position.z);
-        cap.rotation.y = Math.PI / 4;
-        group.add(cap);
-      } else if (r < 0.62) {
-        // Antenna with a red beacon.
-        const mast = 0.6 + rand() * 1.2;
-        group.add(box(0.05, mast, 0.05, standard(0x1a1d26, { fog: false }), tower.position.x, ground + h + mast / 2, tower.position.z));
-        group.add(emissiveBox(0.09, 0.09, 0.09, 0xff3355, 3, tower.position.x, ground + h + mast, tower.position.z));
-      }
-      x += w + row.gap + rand() * 2.2;
+  const towers = [];
+  function tower(ring, x, z, w, d) {
+    const h = ring.hMin + rand() * (ring.hMax - ring.hMin);
+    const tex = textures[Math.floor(rand() * textures.length)].clone();
+    tex.repeat.set(Math.max(1, Math.round(w / 1.6)), Math.max(1, Math.round(h / 3.2)));
+    tex.needsUpdate = true;
+    // Slight per-tower shade so neighbouring slabs separate.
+    const shade = new THREE.Color(ring.tint).multiplyScalar(0.8 + rand() * 0.45);
+    const material = new THREE.MeshStandardMaterial({
+      color: shade, map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: ring.glow,
+      roughness: 0.95, metalness: 0.05, fog: false,
+    });
+    const mesh = box(w, h, d, material, x, ground + h / 2, z);
+    group.add(mesh);
+    const r = rand();
+    if (r < 0.35) {
+      group.add(box(w * (0.4 + rand() * 0.3), h * 0.12, d * 0.6, material, x, ground + h + h * 0.06, z)); // setback
+    } else if (r < 0.5) {
+      const mast = 1.5 + rand() * 3;
+      group.add(box(0.12, mast, 0.12, standard(0x161a26, { fog: false }), x, ground + h + mast / 2, z));
+      group.add(emissiveBox(0.22, 0.22, 0.22, 0xff4d7d, 3, x, ground + h + mast, z));
+    }
+    towers.push(mesh);
+    return mesh;
+  }
+  rings.forEach((ring) => {
+    // Left edge: a line of towers at x in [-far, -near], running from behind to in front of the desk.
+    for (let z = -ring.far - 4; z < 14;) {
+      const w = ring.wMin + rand() * (ring.wMax - ring.wMin);
+      const d = ring.wMin + rand() * (ring.wMax - ring.wMin);
+      tower(ring, -ring.near - rand() * (ring.far - ring.near) - w / 2, z + d / 2, w, d);
+      z += d + ring.gap + rand() * 2;
+    }
+    // Back edge: from far left to the right of the frame.
+    for (let x = -ring.far - 4; x < 16;) {
+      const w = ring.wMin + rand() * (ring.wMax - ring.wMin);
+      const d = ring.wMin + rand() * (ring.wMax - ring.wMin);
+      tower(ring, x + w / 2, -ring.near - rand() * (ring.far - ring.near) - d / 2, w, d);
+      x += w + ring.gap + rand() * 2;
     }
   });
 
-  // A dim city glow on the towers' faces, so unlit walls are not pure black.
-  const glow = new THREE.HemisphereLight(0x4a3a7a, 0x2a1428, 1.4);
-  glow.position.set(0, 10, -12);
-  group.add(glow);
+  // Falling streaks of light between the towers: short vertical segments that
+  // drift down and wrap, in the window colours.
+  const RAIN = 220;
+  const positions = new Float32Array(RAIN * 6);
+  const colors = new Float32Array(RAIN * 6);
+  const drops = [];
+  const palette = WINDOW_COLORS.map((hex) => new THREE.Color(hex));
+  for (let i = 0; i < RAIN; i += 1) {
+    const onLeft = rand() < 0.55;
+    const x = onLeft ? -6 - rand() * 14 : -18 + rand() * 30;
+    const z = onLeft ? -14 + rand() * 24 : -6 - rand() * 14;
+    const drop = { x, z, y: -4 + rand() * 20, len: 0.25 + rand() * 0.7, speed: 1.2 + rand() * 2.4 };
+    drops.push(drop);
+    const c = palette[Math.floor(rand() * palette.length)];
+    for (let k = 0; k < 2; k += 1) {
+      colors[i * 6 + k * 3] = c.r;
+      colors[i * 6 + k * 3 + 1] = c.g;
+      colors[i * 6 + k * 3 + 2] = c.b;
+    }
+  }
+  const rainGeometry = new THREE.BufferGeometry();
+  rainGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  rainGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const rain = new THREE.LineSegments(rainGeometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, fog: false }));
+  rain.frustumCulled = false;
+  group.add(rain);
+  function updateRain(dt) {
+    for (let i = 0; i < RAIN; i += 1) {
+      const d = drops[i];
+      d.y -= d.speed * dt;
+      if (d.y < -6) d.y = 16 + Math.random() * 4;
+      positions[i * 6] = d.x;
+      positions[i * 6 + 1] = d.y;
+      positions[i * 6 + 2] = d.z;
+      positions[i * 6 + 3] = d.x;
+      positions[i * 6 + 4] = d.y + d.len;
+      positions[i * 6 + 5] = d.z;
+    }
+    rainGeometry.attributes.position.needsUpdate = true;
+  }
+  updateRain(0);
+
+  // A dim city glow so unlit facades are not pure black.
+  group.add(new THREE.HemisphereLight(0x3a3060, 0x1a1020, 1.1));
 
   scene.add(group);
-  return group;
+  return { group, towers, updateRain };
 }
 
 // ---------------------------------------------------------------------------
 // Set dressing.
 
 function buildRoom(scene) {
+  // The platform: a floor with a grid, its far edges lit like the desk's.
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), standard(0xffffff, { map: floorTexture(), roughness: 0.95 }));
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
+  scene.add(emissiveBox(14, 0.03, 0.03, PALETTE.magenta, 2.2, 0, 0.015, -7));
+  scene.add(emissiveBox(0.03, 0.03, 14, PALETTE.blue, 2.0, -7, 0.015, 0));
 
-  const wallMaterial = standard(PALETTE.wall, { roughness: 1 });
-  // Back wall with a wide window (x -2.4..3.2, y 0.9..3.3) onto the skyline.
-  const W = { left: -2.4, right: 3.2, bottom: 0.9, top: 3.3, z: -1.9 };
-  const wallPiece = (w, h, x, y) => {
-    const piece = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMaterial);
-    piece.position.set(x, y, W.z);
-    scene.add(piece);
-  };
-  wallPiece(14, W.bottom, 0, W.bottom / 2);
-  wallPiece(14, 5 - W.top, 0, (5 + W.top) / 2);
-  wallPiece(W.left + 7, W.top - W.bottom, (W.left - 7) / 2, (W.top + W.bottom) / 2);
-  wallPiece(7 - W.right, W.top - W.bottom, (W.right + 7) / 2, (W.top + W.bottom) / 2);
-  const frame = standard(0x14161d, { roughness: 0.6, metalness: 0.3 });
-  const winW = W.right - W.left;
-  const winH = W.top - W.bottom;
-  const cx = (W.left + W.right) / 2;
-  const cy = (W.top + W.bottom) / 2;
-  scene.add(box(winW + 0.12, 0.08, 0.12, frame, cx, W.top + 0.02, W.z + 0.02));
-  scene.add(box(winW + 0.12, 0.08, 0.16, frame, cx, W.bottom - 0.02, W.z + 0.02)); // sill
-  scene.add(box(0.08, winH, 0.12, frame, W.left - 0.02, cy, W.z + 0.02));
-  scene.add(box(0.08, winH, 0.12, frame, W.right + 0.02, cy, W.z + 0.02));
-  scene.add(box(0.05, winH, 0.08, frame, -0.6, cy, W.z + 0.02)); // mullions
-  scene.add(box(0.05, winH, 0.08, frame, 1.3, cy, W.z + 0.02));
-  const glass = new THREE.Mesh(
-    new THREE.PlaneGeometry(winW, winH),
-    new THREE.MeshStandardMaterial({ color: 0x9db4ff, transparent: true, opacity: 0.06, roughness: 0.1, metalness: 0.5, depthWrite: false }),
-  );
-  glass.position.set(cx, cy, W.z + 0.01);
-  scene.add(glass);
-  const left = new THREE.Mesh(new THREE.PlaneGeometry(8, 5), wallMaterial);
-  left.rotation.y = Math.PI / 2;
-  left.position.set(-3.2, 2.5, 1);
-  scene.add(left);
+  const skyline = buildSkyline(scene);
 
-  // The set dressing is the city outside.
-  buildSkyline(scene);
-
+  // A candlestick poster on a free-standing board behind the desk, right side.
+  const board = box(0.6, 0.8, 0.05, standard(PALETTE.shape), 1.9, 1.3, -1.6);
+  scene.add(board);
   const poster = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.69), standard(0xffffff, { map: posterTexture(), roughness: 1 }));
-  poster.position.set(-3.19, 1.55, -0.4); // on the left wall
-  poster.rotation.y = Math.PI / 2;
+  poster.position.set(1.9, 1.3, -1.57);
   scene.add(poster);
-
-  // Neon tubes: the magenta one is the rim light, the blue one a cool accent.
-  scene.add(emissiveBox(winW, 0.035, 0.035, PALETTE.magenta, 2.2, cx, W.top + 0.09, -1.85)); // along the window head
-  scene.add(emissiveBox(0.035, winH, 0.035, PALETTE.blue, 2.0, W.left - 0.09, cy, -1.85)); // up the window's left jamb
 
   // Contact shadow under the stool.
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.set(-0.16, 0.003, 0.56);
   scene.add(shadow);
+  return skyline;
 }
 
 function buildDesk(scene) {
@@ -701,7 +713,7 @@ export function startScene(canvas) {
   fill.position.set(2.4, 1.3, 1.8);
   scene.add(fill);
 
-  buildRoom(scene);
+  const skyline = buildRoom(scene);
   buildDesk(scene);
 
   const monitorYaw = 0.5;
@@ -750,8 +762,8 @@ export function startScene(canvas) {
   }
 
   // --- orbit ----------------------------------------------------------------
-  const target = new THREE.Vector3(-0.3, 0.98, 0.12);
-  const orbit = { home: 0.68, drag: 0, sway: 0, velocity: 0, radius: 3.2, elevation: 0.19 };
+  const target = new THREE.Vector3(-0.3, 0.9, 0.12);
+  const orbit = { home: 0.68, drag: 0, sway: 0, velocity: 0, radius: 3.1, elevation: 0.17 };
   function clampDrag() {
     if (orbit.drag < ORBIT_MIN) { orbit.drag = ORBIT_MIN; orbit.velocity = 0; }
     if (orbit.drag > ORBIT_MAX) { orbit.drag = ORBIT_MAX; orbit.velocity = 0; }
@@ -833,6 +845,7 @@ export function startScene(canvas) {
 
   function animate(t, dt) {
     anim.t = t;
+    skyline.updateRain(dt);
     // Camera sway around home; the user's drag offset is added on top.
     orbit.sway = 0.2 * Math.sin(t * 0.14);
     if (!dragging && Math.abs(orbit.velocity) > 1e-4) {
