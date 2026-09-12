@@ -29,7 +29,7 @@ case "${1:-worker}" in
       --stake "${STONKFLY_STAKE:-1}" \
       --loss-stop "${STONKFLY_LOSS_STOP:-20}" \
       --daily-deploys "${STONKFLY_DAILY_DEPLOYS:-300}" \
-      --neural-ms "${STONKFLY_NEURAL_MS:-840}" --step-ms "${STONKFLY_STEP_MS:-40}"
+      --neural-ms "${STONKFLY_NEURAL_MS:-500}"
     [ "$MODE" = "live" ] && set -- "$@" --live
     [ "${STONKFLY_FROZEN:-0}" = "1" ] && set -- "$@" --frozen
     [ -n "${BLOB_READ_WRITE_TOKEN:-}" ] && set -- "$@" --publish

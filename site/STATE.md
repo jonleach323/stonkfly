@@ -11,8 +11,6 @@ worker publishes (`run --publish`). The page never has write access to anything.
 | `GET /api/board` | Live public SatRush board summary, proxied server-side | every 2 s |
 | `GET /api/audit` | Every deploy intent with signature, hashes and outcome | on demand |
 | `GET /api/sensory.png` | The exact 320×180 frame the retina last received | when `publication.frame_sha256` changes |
-| `GET /api/atlas.bin`, `/api/atlas.json` | The run's neuron atlas for the neural replay: `SFAT`, u32 version, u32 n, then int16 xyz ×n (soma positions scaled to ±30,000), u8 class ×n, u8 readout group ×n; the JSON carries class names and counts | once per run (`publication.atlas_sha256`) |
-| `GET /api/activity.bin` | The latest observation's spikes for the atlas cells: `SFAC`, u32 version, tick, n, bins, bin_ms, then u8 counts [bins × n] | when `publication.activity_sha256` changes |
 
 ## `/api/state`
 
@@ -90,10 +88,7 @@ with six decimals. Times are Unix seconds (floats). `null` means unknown.
       "status": "PAPER" | "CONFIRMED" | "FAILED" | "VETO", "reason": null | "Round closing before submission",
       "stimulus": "none" | "reward" | "aversive", "kc_spikes": 4376, "changed_edges": 1795, "median_excess_hz": 4.186 }
   ],
-  "neural": {
-    "steps": [ { "tile": 3, "excess_rel": 0.41, "z": 2.1, "ms": 40 }, … , { "tile": null, "excess_rel": 0.02, "z": 0.4, "ms": 200 } ],  // one entry per 40 ms pick step; a null tile is the stop; z null during the run's warm-up
-    "stop_reason": "no unpicked group firing unusually high" | "all 21 tiles" | "tile limit" | "step budget",
-    "neural_ms_used": 200,                          // latest observation
+  "neural": {                          // latest observation
     "tiles": [1,2,3,4,5,6,8,9,12,21],
     "group_hz": [36.156, … 21 values],  // mean rate of each tile's neuron group
     "excess_hz": [26.523, … 21 values], // rate minus that group's running average
@@ -114,7 +109,7 @@ with six decimals. Times are Unix seconds (floats). `null` means unknown.
   "readout": { "model": "dn-21-group-relative-median-v3", "cells": 1342, "group_sizes": [64, …], "rule": "…", "validated": false } | null,
   "model": { "connectome": "MaleCNS v1.0", "neurons": 166700, "retained_edges": 25582938, "readout": "…", "learning_validated": false },
   "policy": "…", "animation": "…", "learning_validated": false,
-  "publication": { "frame_sha256": "…", "activity_sha256": "…" | null, "atlas_sha256": "…" | null, "provenance_sha256": "…", "publish_error": null, "audit_sha256": "…" }
+  "publication": { "frame_sha256": "…", "provenance_sha256": "…", "publish_error": null, "audit_sha256": "…" }
 }
 ```
 

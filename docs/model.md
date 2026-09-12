@@ -22,18 +22,17 @@ Every round the public SatRush board is rendered locally as a fixed 320×180 ima
 
 Existing R8→aMe12 connections use a net excitatory sign motivated by [Xiao et al., 2023](https://doi.org/10.1038/s41586-023-06681-6); transferring that result to these reconstructed cells and contact-count magnitudes remains an assumption. Tile shading is a warm orange ramp on a light background. On the full graph, Kenyon-cell activity proved knife-edge sensitive to the palette: blue ramps left the network in a near-silent regime (about 10 KC spikes per observation) on some real boards and an active one (about 4,500) on others; the warm ramp drove the active regime on every board probed. That choice was made on KC activity alone, never on game outcomes. Display sensitivity remains a major confound.
 
-By default each round advances **up to 840 ms of neural time** (about 5 s of wall time on four cores), regardless of the roughly 63 s round. That is a deliberately compressed game-to-neural clock, not real-time fly physiology. Eligibility and decay operate in neural seconds.
+By default each round advances **500 ms of neural time** (about 5 s of wall time on four cores), regardless of the roughly 63 s round. That is a deliberately compressed game-to-neural clock, not real-time fly physiology. Eligibility and decay operate in neural seconds.
 
 ## How neural spikes become a tile choice
 
-Every neuron whose annotated cell type starts with `DN` (descending neurons; 1,342 cells in this graph) is sorted by body ID and cut into 21 contiguous groups, one per tile. Each group keeps an exponential moving average of its own rate over about 20 observations, a stand-in for adaptation; without it the lowest-ID group fired at 36 Hz on every board and the same ten tiles were chosen every round. The excess is taken relative to that average because the whole network swings between quiet and active regimes, and a global ramp would otherwise reproduce the raw rate ranking for as long as the average lags. Tiles are picked one at a time (readout v5). Each observation is a run of 40 ms steps, up to 21 of them: the network sees the board with its picks so far, and after each step the unpicked group with the largest excess picks its tile if it is firing unusually high, more than one of its own standard deviations above its usual rate (each group keeps a running variance as well as a running average; until a run has 21 steps of history the rule is rate above the median rate). When no unpicked group is that high, the fly stops. In a steady network about one group in six is that high at any moment, so the count is a neural quantity that varies widely from round to round: often a handful, sometimes one, sometimes all 21 when the whole network surges above its lagging averages. Each step:
+Every neuron whose annotated cell type starts with `DN` (descending neurons; 1,342 cells in this graph) is sorted by body ID and cut into 21 contiguous groups, one per tile. Each group keeps an exponential moving average of its own rate over about 20 observations, a stand-in for adaptation; without it the lowest-ID group fired at 36 Hz on every board and the same ten tiles were chosen every round. The excess is taken relative to that average because the whole network swings between quiet and active regimes, and a global ramp would otherwise reproduce the raw rate ranking for as long as the average lags. The threshold is zero rather than the median (readout v4), so the count is a neural quantity: a quiet network proposes a tile or two, a network-wide surge above the lagging averages can propose all 21. Over each observation:
 
 | Neural measurement | Proposal |
 | --- | --- |
-| Group rate over the step minus its own running average, divided by that average plus 1 Hz (rate minus the median rate before any baseline exists) | Excess |
-| Largest excess among unpicked groups, if more than one standard deviation above that group's usual rate | Picks its tile |
-| No unpicked group that high | Stop |
-| Fewer picks than the configured minimum | The largest excess picks anyway |
+| Group rate minus its own running average, divided by that average plus 1 Hz, above zero (above its own usual rate; above the median rate on the first observation) | Tile selected |
+| Largest excess | Always selected |
+| Selection outside the configured tile-count bounds | Trimmed or extended by excess rank |
 
 The stake per round is a fixed setting, not a neural quantity. The mapping is arbitrary and pre-registered; the cell identities of every group are written to `provenance.json`. This is an engineered interface, not a discovery of "tile neurons". Persistent network bias becomes persistent tile preference; do not interpret that as insight into a random draw.
 

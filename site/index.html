@@ -75,27 +75,6 @@
       <div><dt>BRAIN TIME</dt><dd id="b-time">—</dd></div>
     </dl>
 
-    <section class="panel replay" aria-labelledby="replay-title">
-      <header class="replay-head">
-        <div>
-          <span class="eyebrow" id="replay-title">NEURAL ACTIVITY</span>
-          <b class="replay-count" id="replay-count">166,700 neurons</b>
-          <span class="replay-sub" id="replay-sub">25.6M connections · 1,342 descending neurons</span>
-        </div>
-        <span class="chip" id="replay-chip">WAITING</span>
-      </header>
-      <div class="replay-stage">
-        <canvas id="brain-canvas" role="img" aria-label="Point cloud of the simulated central nervous system, brain above the nerve cord, cells brightening as they spike, replayed at real time. Drag to orbit. Schematic, not a recording."></canvas>
-        <div class="replay-hud" aria-hidden="true"><b id="replay-rate">—</b><span>SPIKES / S</span></div>
-        <p class="replay-fallback" id="replay-fallback" hidden>3D VIEW OFF</p>
-      </div>
-      <div class="replay-foot">
-        <figure class="raster"><canvas id="raster" width="400" height="84" aria-label="Spike raster: 21 descending-neuron groups over ten slices of neural time"></canvas><figcaption id="raster-caption">21 DN GROUPS · 10 SLICES</figcaption></figure>
-        <p class="replay-scale"><i aria-hidden="true"></i>ACTIVITY · SILENT — FIRING</p>
-      </div>
-      <p class="fine" id="replay-note">16,000 of 166,700 simulated cells at their soma positions. Brightness is how much each fired in the last observation; each new observation's spikes play once, at real time. A model, not a recording.</p>
-    </section>
-
     <section class="panel pick" aria-labelledby="pick-title">
       <header class="panel-head">
         <h2 id="pick-title">NEURAL PICK</h2>
@@ -104,8 +83,7 @@
       <ol class="minigrid" id="minigrid" aria-label="The 21 tiles; lit tiles are the fly's latest proposal"></ol>
       <p class="pick-line"><span class="chip" id="pick-status">WAITING</span> <span id="pick-tiles">WAITING FOR WORKER</span></p>
       <p class="stimulus" id="stimulus" aria-live="polite">—</p>
-      <p class="fine" id="pick-steps">—</p>
-      <p class="fine">Fixed readout, one tile at a time. Every 40 ms the group of descending neurons firing most above its usual rate picks its tile, if it is unusually high: over a standard deviation above. When none is, the fly stops. Not a strategy.</p>
+      <p class="fine">Fixed readout. 21 groups of descending neurons, one per tile. The groups firing above their usual rate light up. Not a strategy.</p>
     </section>
   </section>
 
@@ -289,7 +267,7 @@
               <rect x="26" y="64" width="18" height="18" fill="#bdff32"/><rect x="48" y="64" width="18" height="18" fill="#32353e"/><rect x="70" y="64" width="18" height="18" fill="#32353e"/><rect x="92" y="64" width="18" height="18" fill="#bdff32"/><rect x="114" y="64" width="18" height="18" fill="#32353e"/><rect x="136" y="64" width="18" height="18" fill="#bdff32"/><rect x="158" y="64" width="18" height="18" fill="#32353e"/>
               <rect x="26" y="86" width="18" height="18" fill="#32353e"/><rect x="48" y="86" width="18" height="18" fill="#bdff32"/><rect x="70" y="86" width="18" height="18" fill="#bdff32"/><rect x="92" y="86" width="18" height="18" fill="#32353e"/><rect x="114" y="86" width="18" height="18" fill="#32353e"/><rect x="136" y="86" width="18" height="18" fill="#bdff32"/><rect x="158" y="86" width="18" height="18" fill="#bdff32"/>
             </g>
-            <text x="101" y="122" class="diagram-small" fill="#bdff32" text-anchor="middle">ONE TILE PER 40 MS STEP</text>
+            <text x="101" y="122" class="diagram-small" fill="#bdff32" text-anchor="middle">21 DN GROUPS -&gt; TILES</text>
             <path d="M101 126v18h100v-30" fill="none" stroke="#526078" stroke-width="2"/>
             <g fill="#101820" stroke="#526078" stroke-width="2"><path d="M206 50h100v52H206z"/></g>
             <text x="256" y="72" class="diagram-small" fill="#f3f4ed" text-anchor="middle">GUARD</text>
@@ -305,7 +283,7 @@
           <figcaption id="how-execution">READING EXECUTION MODE…</figcaption>
         </figure>
         <h3>A SPIKE CAN BECOME A DEPLOY.</h3>
-        <p>A fixed readout turns descending-neuron spikes into tiles<span id="readout-cells"></span>, <strong>one at a time</strong>: every 40 ms the group firing most above its usual rate picks its tile if it is unusually high, over a standard deviation above, and the fly sees its picks on the board. When no group is, it stops. A guard checks timing, budget and count. It can veto, never choose. At most <strong>one deploy per round</strong>.</p>
+        <p>A fixed readout turns descending-neuron spikes into tiles<span id="readout-cells"></span>. A guard checks timing, budget and count. It can veto, never choose. At most <strong>one deploy per round</strong>.</p>
       </article>
     </li>
     <li>
