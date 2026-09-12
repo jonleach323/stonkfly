@@ -318,12 +318,6 @@ details.perf[open] summary { margin-bottom: 12px; }
 .pixel-eye { display: grid; justify-items: center; gap: 4px; font: 7px/1.8 var(--pixel); color: var(--muted); }
 .pixel-eye svg { width: 108px; height: 104px; }
 @media (max-width: 480px) { .sensory-fig { grid-template-columns: minmax(0, 1fr); } .pixel-eye { justify-self: start; } }
-.note { margin-top: 24px; border-color: var(--acid); box-shadow: 3px 3px 0 var(--acid); }
-.note h2 { font: 12px/1.6 var(--pixel); color: var(--acid); margin: 0 0 10px; }
-.note p { margin: 0 0 8px; color: var(--ink); }
-.note-links { margin: 14px 0 0; font: 8px/1.8 var(--pixel); text-transform: uppercase; color: var(--muted); }
-.note-links a { display: inline-block; padding-block: 7px 5px; color: var(--ink); text-decoration: none; border-bottom: 2px solid var(--line); }
-.note-links a:hover { border-color: var(--acid); }
 
 /* ---------- footer ---------- */
 .foot {
