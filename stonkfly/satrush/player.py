@@ -131,12 +131,6 @@ class LivePlayer:
         unclaimed = 0 if miner is None else miner["unclaimed_usd"]
         if lamports < MIN_SOL_LAMPORTS:
             raise RuntimeError("Wallet needs at least 0.005 SOL for network fees")
-        if D(usdc + unclaimed) / 10**6 > D(self.s.capital):
-            raise RuntimeError(
-                f"Wallet holds more than the {self.s.capital} USDC experiment cap "
-                f"({D(usdc) / 10**6} USDC in the wallet, {D(unclaimed) / 10**6} unclaimed in the game); "
-                "move the excess out or use a dedicated wallet"
-            )
         if stored is None:
             with self.l.transaction():
                 self.l.put("wallet", str(self.wallet))

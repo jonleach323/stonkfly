@@ -25,7 +25,7 @@ def down(value, step):
 @dataclass(frozen=True)
 class Settings:
     network: str = "mainnet"
-    capital: str = "100"  # Maximum USDC the dedicated wallet may hold at start; the program ceiling is 1000.
+    capital: str = "100"  # Paper starting balance in USDC and the ceiling for the loss stop; live play uses the wallet as it is.
     stake: str = "1"  # USDC deployed per round, split evenly across chosen tiles.
     loss_stop: str = "20"
     daily_deploys: int = 300

@@ -31,7 +31,7 @@ def main():
     run.add_argument("--steps", type=int, default=0, help="Observations to make; 0 keeps running")
     run.add_argument("--frozen", action="store_true", help="Freeze all memory efficacies for a control run")
     run.add_argument("--out", type=Path)
-    run.add_argument("--capital", default="100", help="Most USDC the wallet may hold at the start (up to 1000)")
+    run.add_argument("--capital", default="100", help="Paper starting balance and loss-stop ceiling in USDC (up to 1000)")
     run.add_argument("--stake", default="1", help="USDC per round (1-10)")
     run.add_argument("--loss-stop", default="20", help="Stop deploying after this USDC drawdown")
     run.add_argument("--daily-deploys", type=int, default=300)
@@ -266,7 +266,7 @@ def keygen_file(path):
     return {
         "address": str(keypair.pubkey()),
         "file": str(path),
-        "next": "Fund this address with at most STONKFLY_CAPITAL USDC (default 100) and about 0.02 SOL. Keep the file private; "
+        "next": "Fund this address with the USDC you are willing to lose and about 0.02 SOL. Keep the file private; "
         "for Docker put its contents in SATRUSH_KEYPAIR_JSON in .env.",
     }
 
