@@ -164,7 +164,6 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
       colors[i * 3 + 2] = (base[i * 3 + 2] + (LIT[2] - base[i * 3 + 2]) * e) * dim;
     }
     points.geometry.attributes.color.needsUpdate = true;
-    drawRaster(bin);
     if (hud) {
       let spikes = 0;
       if (have) for (let i = 0; i < n; i += 1) spikes += activity.counts[bin * n + i];
@@ -173,7 +172,9 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
     }
   }
 
-  function drawRaster(bin) {
+  // The raster: 21 readout groups (rows) over the ten slices of the observation
+  // (columns), a still picture of when each group fired. Drawn once per observation.
+  function drawRaster() {
     if (!raster) return;
     const ctx = raster.getContext('2d');
     const w = raster.width;
@@ -190,14 +191,9 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
       for (let b = 0; b < bins; b += 1) {
         const v = groupTotals[g * bins + b] / max;
         if (v <= 0) continue;
-        const a = 0.15 + 0.85 * v;
-        ctx.fillStyle = b === bin ? `rgba(255,255,255,${a})` : `rgba(189,255,50,${a})`;
+        ctx.fillStyle = `rgba(189,255,50,${0.15 + 0.85 * v})`;
         ctx.fillRect(b * cw + 1, g * rh + 1, Math.max(1, cw - 2), Math.max(1, rh - 1));
       }
-    }
-    if (bin >= 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      ctx.fillRect(bin * cw, 0, 1, h);
     }
   }
 
@@ -263,6 +259,7 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
       energy = null;
       rebuild();
       totals();
+      drawRaster();
       paintBin(-1);
       kick();
     },
@@ -271,6 +268,7 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
       replayT = 0;
       lastBin = -1;
       totals();
+      drawRaster();
       if (points) { energy.fill(0); paintBin(0); }
       kick();
     },
