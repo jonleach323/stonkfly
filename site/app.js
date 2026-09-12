@@ -375,6 +375,19 @@ function renderPick(s) {
       el("span", { class: "tilelist", text: tiles.length ? `· ${tileList(tiles)}` : "" }),
     ]);
   }
+  // The order the tiles were picked in, and why the fly stopped.
+  const stepsEl = $("pick-steps");
+  if (stepsEl) {
+    const steps = Array.isArray(n.steps) ? n.steps : null;
+    if (!steps) stepsEl.textContent = "";
+    else {
+      const used = num(n.neural_ms_used);
+      const why = String(n.stop_reason || "").replace("no unpicked group above its usual rate", "nothing left above its usual rate");
+      stepsEl.textContent = tiles.length
+        ? `Picked one at a time: ${tiles.join(" → ")}. Stopped after ${steps.length} step${steps.length === 1 ? "" : "s"}${used ? ` (${fmtInt(used)} ms)` : ""}: ${why || "done"}.`
+        : "No tile picked.";
+    }
+  }
   const status = d0 ? String(d0.status || "").toUpperCase() : "";
   let statusText = status || "—";
   let tone = "";

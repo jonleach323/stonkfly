@@ -125,9 +125,9 @@ class GameLoop:
             self.sleep(5.0)
             return None
         kind = self.l.get("stimulus") or "none"
-        frame = board_frame(board, now)
         self.heartbeat("simulating neurons")
-        neural = self.controller.observe(frame, kind)
+        neural = self.controller.observe(lambda picks: board_frame(board, now, picks), kind)
+        frame = board_frame(board, now, neural["tiles"])  # what the retina last saw: the board with its picks
         activity = neural.pop("activity", None)  # binned spikes of the atlas subsample; a file, not JSON
         self.l.put("stimulus", "none")
         slot = self.l.get("tick") % 2

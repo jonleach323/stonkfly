@@ -109,3 +109,58 @@ def test_count_is_a_neural_quantity_from_one_tile_to_all_21():
     for _ in range(4):
         r2.decode(base * 3, 0.5)
     assert r2.decode(base, 0.5)["tiles"] == [1]  # every group below: only the argmax stays
+
+
+def test_one_tile_per_step_until_nothing_is_above_its_usual_rate():
+    r, _ = readout(adaptation=1000)  # a slow baseline, so the steps below read against a fixed average
+    base = np.full(63, 4, dtype=np.int32)
+    r.decode(base, 0.5)  # sets the baseline: every group at 8 Hz
+    chosen = []
+    loud = base.copy()
+    loud[0:3] = 20   # group 1
+    loud[30:33] = 12  # group 11
+    first = r.step(loud, 0.5, chosen)
+    assert first["pick"] == 1 and first["best_excess_rel"] > 0
+    chosen.append(first["pick"])
+    second = r.step(loud, 0.5, chosen)
+    assert second["pick"] == 11  # the loudest unpicked group
+    chosen.append(second["pick"])
+    third = r.step(loud, 0.5, chosen)
+    assert third["pick"] is None  # nothing left above its usual rate: stop
+    # With every group above its average, picks continue until all 21 are taken.
+    r2, _ = readout(adaptation=1000)
+    r2.decode(base, 0.5)
+    taken = []
+    for _ in range(25):
+        out = r2.step(base * 3, 0.5, taken)
+        if out["pick"] is None:
+            break
+        taken.append(out["pick"])
+    assert sorted(taken) == list(range(1, 22)) and out["pick"] is None
+    # The first pick is always made, even from a quiet network.
+    r3, _ = readout(adaptation=1000)
+    r3.decode(base * 3, 0.5)
+    assert r3.step(base, 0.5, [])["pick"] is not None
+
+
+def test_frame_marks_the_picks_so_far():
+    board = FixtureApi(period=60, clock=lambda: 0.0).board()
+    plain = board_frame(board, now=0.0)
+    marked = board_frame(board, now=0.0, picks=[5, 21])
+    x0, y0, x1, y1 = tile_box(4)
+    assert not np.array_equal(plain[y0:y1, x0:x1], marked[y0:y1, x0:x1])
+    x0, y0, x1, y1 = tile_box(0)
+    assert np.array_equal(plain[y0:y1, x0:x1], marked[y0:y1, x0:x1])
+
+
+def test_stub_controller_picks_sequentially():
+    from stonkfly.neural.controller import StubController
+
+    c = StubController(Settings(neural_ms=400, step_ms=40))
+    frames = []
+    out = c.observe(lambda picks: frames.append(list(picks)) or np.zeros((180, 320, 3), np.uint8), "none")
+    assert 1 <= len(out["tiles"]) <= 10 and len(set(out["tiles"])) == len(out["tiles"])
+    assert out["steps"][-1]["tile"] is None or len(out["tiles"]) == 10
+    assert out["stop_reason"] in ("no unpicked group above its usual rate", "step budget", "tile limit", "all 21 tiles")
+    assert frames[0] == [] and all(frames[i] == out["tiles"][:i] for i in range(len(frames)))
+    assert out["neural_ms_used"] == 40 * len(out["steps"])
