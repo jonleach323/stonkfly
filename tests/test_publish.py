@@ -336,7 +336,9 @@ def test_activity_and_atlas_files(run_dir, tmp_path):
     blob = (out / "latest-activity.bin").read_bytes()
     act = decode_activity(blob)
     assert act["bins"] == BINS and act["n"] == 210 and act["tick"] == 3 and act["counts"].shape == (BINS, 210)
-    assert act["bin_ms"] == 84  # the 840 ms observation budget in ten slices
+    state = json.loads((out / "latest.json").read_text())
+    assert act["bin_ms"] == round(state["neural"]["neural_ms_used"] / BINS)  # the time actually used, in ten slices
+    assert act["counts"].sum() > 0
 
     atlas = stub(210)
     back = decode_atlas(encode_atlas(atlas))

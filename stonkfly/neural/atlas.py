@@ -145,6 +145,15 @@ def write(atlas, out):
     (out / "atlas.json").write_text(json.dumps(atlas["meta"], indent=2) + "\n")
 
 
+def rebin(chunks, used_ms, n):
+    """Fold (start_ms, counts) chunks into BINS equal slices of the time actually used."""
+    bins = np.zeros((BINS, n), dtype=np.uint16)
+    span = max(float(used_ms), 1e-9)
+    for start_ms, counts in chunks:
+        bins[min(BINS - 1, int(start_ms * BINS / span))] += counts
+    return bins
+
+
 def encode_activity(tick, bins, bin_ms):
     """bins: (BINS, n) spike counts per slice; stored as uint8, clipped."""
     bins = np.asarray(bins)

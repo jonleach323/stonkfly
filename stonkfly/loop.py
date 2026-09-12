@@ -173,7 +173,7 @@ class GameLoop:
             os.fsync(f.fileno())
         Image.fromarray(frame).save(self.out / "latest-input.png")
         if activity is not None:
-            blob = encode_activity(row["tick"], activity, self.s.neural_ms / len(activity))
+            blob = encode_activity(row["tick"], activity, float(neural.get("neural_ms_used") or self.s.neural_ms) / len(activity))
             tmp = self.out / "latest-activity.bin.partial"
             tmp.write_bytes(blob)
             tmp.replace(self.out / "latest-activity.bin")

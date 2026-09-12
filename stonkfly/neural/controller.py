@@ -44,9 +44,10 @@ class FlyController:
         b = self.brain
         s = self.s
         counts = np.zeros(b.n, dtype=np.int32)
-        # Spikes of the atlas subsample in BINS slices of the neural time budget, for the page's replay.
+        # Spikes of the atlas subsample per neural-time chunk, re-binned at the end
+        # into BINS slices of the time actually used, for the page's replay.
         watched = self.atlas["index"]
-        activity = np.zeros((atlas.BINS, len(watched)), dtype=np.uint16)
+        chunks = []  # (start_ms, counts of the watched cells)
         elapsed_ms = 0.0
         wall = 0.0
         pulse = round(s.pulse_ms / b.dt) if reinforcement != "none" else 0
@@ -68,7 +69,7 @@ class FlyController:
                 stimulus = (b.circuit[reinforcement], s.pulse_current) if pulse else None
                 c, took = b.rgb_step(frame, n * b.dt, learning=s.learning, stimulation=stimulus)
                 step_counts += c
-                activity[min(atlas.BINS - 1, int(elapsed_ms * atlas.BINS / s.neural_ms))] += c[watched].astype(np.uint16)
+                chunks.append((elapsed_ms, c[watched].astype(np.uint16)))
                 elapsed_ms += n * b.dt
                 wall += took
                 remaining -= n
@@ -96,6 +97,7 @@ class FlyController:
         while pulse:
             counts += run(min(s.step_ms, pulse * b.dt), frame)
         b.counts[:] = counts
+        activity = atlas.rebin(chunks, elapsed_ms, len(watched))
         return {
             "tiles": list(chosen),
             "steps": steps,
@@ -154,7 +156,7 @@ class StubController:
             raise ValueError("Unknown reinforcement")
         render = rgb if callable(rgb) else (lambda picks: rgb)
         s = self.s
-        bins = np.zeros((atlas.BINS, self.n), dtype=np.int32)
+        chunks = []
         counts = np.zeros(self.n, dtype=np.int32)
         chosen = []
         steps = []
@@ -165,7 +167,7 @@ class StubController:
         for _ in range(s.max_steps):
             frame = render(chosen)
             step_counts = self.rng.poisson(0.25, self.n).astype(np.int32)
-            bins[min(atlas.BINS - 1, int(elapsed * atlas.BINS / s.neural_ms))] += step_counts
+            chunks.append((elapsed, step_counts.astype(np.uint16)))
             counts += step_counts
             elapsed += s.step_ms
             last = self.readout.step(step_counts, s.step_ms / 1000, chosen)
@@ -178,6 +180,7 @@ class StubController:
                 stop_reason = "all 21 tiles" if s.max_tiles >= 21 else "tile limit"
                 break
         self.sim_ms += elapsed
+        bins = atlas.rebin(chunks, elapsed, self.n)
         return {
             "tiles": list(chosen),
             "steps": steps,

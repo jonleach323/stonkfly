@@ -13,8 +13,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 // grey, spiking cells go to a warm white, like an activity map.
 const REST = [0.42, 0.46, 0.52];
 const LIT = [1.0, 0.96, 0.82];
-const BINS_PER_SECOND = 20;  // 50 ms slices at real time: 500 ms of neural time replays in 500 ms
-const HOLD_SECONDS = 0.4;    // pause on the afterglow before the replay restarts
+const HOLD_SECONDS = 2.0;    // rest on the activity map before the spikes play again
 
 function readAtlas(buffer) {
   const view = new DataView(buffer);
@@ -123,35 +122,43 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
     camera.updateProjectionMatrix();
   }
 
+  let totalMap = null; // per-cell brightness from its spikes over the whole observation
   function totals() {
     groupTotals = null;
+    totalMap = null;
     if (!atlas || !activity || activity.n !== atlas.n) return;
     const { bins, counts, n } = activity;
     groupTotals = new Float32Array(21 * bins);
+    totalMap = new Float32Array(n);
     binMax = 1;
     for (let b = 0; b < bins; b += 1) {
       let sum = 0;
       for (let i = 0; i < n; i += 1) {
         const v = counts[b * n + i];
         sum += v;
+        totalMap[i] += v;
         const g = atlas.group[i];
         if (g) groupTotals[(g - 1) * bins + b] += v;
       }
       if (sum > binMax) binMax = sum;
     }
+    for (let i = 0; i < n; i += 1) totalMap[i] = Math.min(1, Math.log1p(totalMap[i]) / Math.log1p(12));
   }
 
-  // Colour every point for one slice of neural time (bin < 0: resting, dim).
+  // Colour every point for one slice of neural time (bin < 0: the map alone).
+  // The map: each cell's brightness follows its spikes over the whole
+  // observation (log scale, most cells never fire); the slice adds a sparkle
+  // to the cells spiking right now, which decays over the following slices.
   function paintBin(bin) {
     if (!points) return;
     const n = atlas.n;
     const colors = points.geometry.attributes.color.array;
     const have = activity && activity.n === n && bin >= 0 && bin < activity.bins;
     for (let i = 0; i < n; i += 1) {
-      const hit = have ? Math.min(1, activity.counts[bin * n + i] / 2) : 0;
+      const hit = have ? Math.min(1, Math.log1p(activity.counts[bin * n + i]) / Math.log1p(6)) : 0;
       energy[i] = Math.max(energy[i] * 0.6, hit);
-      const e = energy[i];
-      const dim = 0.55 + 0.45 * e; // resting grey stays visible, lit cells go warm white
+      const e = Math.min(1, (totalMap ? totalMap[i] : 0) * 0.75 + energy[i]);
+      const dim = 0.5 + 0.5 * e; // resting grey stays visible, active cells go warm white
       colors[i * 3] = (base[i * 3] + (LIT[0] - base[i * 3]) * e) * dim;
       colors[i * 3 + 1] = (base[i * 3 + 1] + (LIT[1] - base[i * 3 + 1]) * e) * dim;
       colors[i * 3 + 2] = (base[i * 3 + 2] + (LIT[2] - base[i * 3 + 2]) * e) * dim;
@@ -220,9 +227,11 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
     pivot.rotation.x = pitch + dragPitch;
     if (activity && atlas && activity.n === atlas.n) {
       replayT += dt;
-      const cycle = activity.bins / BINS_PER_SECOND + HOLD_SECONDS;
+      // Slices play at real time: each lasts its bin_ms of neural time.
+      const play = activity.bins * activity.binMs / 1000;
+      const cycle = play + HOLD_SECONDS;
       if (replayT >= cycle) { replayT -= cycle; }
-      const bin = replayT < activity.bins / BINS_PER_SECOND ? Math.floor(replayT * BINS_PER_SECOND) : -1;
+      const bin = replayT < play ? Math.min(activity.bins - 1, Math.floor(replayT / (activity.binMs / 1000))) : -1;
       if (bin !== lastBin) { lastBin = bin; paintBin(bin); }
     }
     renderer.render(scene, camera);
