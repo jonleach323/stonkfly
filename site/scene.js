@@ -7,7 +7,7 @@
 // and it never touches game state.
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
-import { drawMonitor, MONITOR_WIDTH, MONITOR_HEIGHT } from './monitor.js';
+import { drawMonitor, MONITOR_WIDTH, MONITOR_HEIGHT, tileCenter, START_RECT } from './monitor.js';
 
 const INTERNAL_WIDTH = 800;        // render width; the canvas is upscaled with image-rendering: pixelated
 const MAX_INTERNAL_HEIGHT = 1024;
@@ -161,28 +161,257 @@ function posterTexture() {
 }
 
 // ---------------------------------------------------------------------------
+// The city. There is no room: the desk sits on a platform and huge low-poly
+// towers stand close on the left and behind it, rising from far below to past
+// the top of the frame, with sparse coloured windows and streaks of falling
+// light. Everything here opts out of the room fog and is tinted by distance.
+
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const WINDOW_COLORS = ['#ff6f9c', '#5ef2e0', '#e8f0ff', '#8fffc4'];
+
+// A tile of a dark facade: faint vertical bands and a few small lit windows.
+function facadeTexture(rand, lit) {
+  const c = document.createElement('canvas');
+  c.width = 32;
+  c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, 32, 64);
+  for (let y = 2; y < 64; y += 4) {
+    for (let x = 1; x < 32; x += 4) {
+      const r = rand();
+      if (r < lit) {
+        ctx.fillStyle = WINDOW_COLORS[Math.floor(rand() * WINDOW_COLORS.length)];
+        ctx.fillRect(x, y, 1, 2);
+      } else if (r < lit + 0.1) {
+        ctx.fillStyle = '#141826';
+        ctx.fillRect(x, y, 1, 2);
+      }
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  return tex;
+}
+
+function skyTexture() {
+  const c = document.createElement('canvas');
+  c.width = 4;
+  c.height = 64;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, 64);
+  // The plane spans y -40..100; the glow sits around eye level.
+  g.addColorStop(0, '#05060c');
+  g.addColorStop(0.5, '#141232');
+  g.addColorStop(0.66, '#3a1a52');
+  g.addColorStop(0.76, '#5c265a');
+  g.addColorStop(0.86, '#3a1a44');
+  g.addColorStop(1, '#1a1028');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 4, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function buildSkyline(scene) {
+  const rand = seeded(20260912);
+  const group = new THREE.Group();
+
+  // Sky: two dark gradient walls, far behind and far left.
+  const skyMaterial = new THREE.MeshBasicMaterial({ map: skyTexture(), fog: false });
+  const skyLeft = new THREE.Mesh(new THREE.PlaneGeometry(260, 140), skyMaterial);
+  skyLeft.rotation.y = Math.PI / 2;
+  skyLeft.position.set(-60, 30, 0);
+  group.add(skyLeft);
+
+  const starPositions = [];
+  for (let i = 0; i < 180; i += 1) starPositions.push(-59, 12 + rand() * 50, -80 + rand() * 160);
+  group.add(new THREE.Points(
+    new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3)),
+    new THREE.PointsMaterial({ color: 0xc9d4ff, size: 0.35, fog: false }),
+  ));
+  const moon = new THREE.Mesh(new THREE.IcosahedronGeometry(2.6, 1), new THREE.MeshBasicMaterial({ color: 0xe9e4d2, fog: false }));
+  moon.position.set(-57, 22, 12);
+  group.add(moon);
+
+  const textures = [facadeTexture(rand, 0.07), facadeTexture(rand, 0.11), facadeTexture(rand, 0.05), facadeTexture(rand, 0.09)];
+  const ground = -11; // the room is high up: the near rooftops sit below eye level, the far towers rise past it
+  // Two rings of towers around the platform's left and back edges; the outer
+  // ring is taller and darker. Each entry: distance band from the platform.
+  const rings = [
+    { near: 6, far: 9, tint: 0x2a3050, glow: 1.0, wMin: 1.6, wMax: 3.4, hMin: 7, hMax: 13, gap: 2.2 },
+    { near: 13, far: 19, tint: 0x1f2442, glow: 0.8, wMin: 2.4, wMax: 5.5, hMin: 10, hMax: 20, gap: 2.4 },
+    { near: 24, far: 34, tint: 0x171a32, glow: 0.6, wMin: 3.5, wMax: 8, hMin: 13, hMax: 27, gap: 2.8 },
+  ];
+  const towers = [];
+  // Facades are unlit: the room's lights must not reach the city and vice
+  // versa, so each tower is a flat-shaded box (a shade per face, baked into
+  // vertex colours) with its windows drawn on top additively.
+  const FACE_SHADE = [1.0, 0.7, 1.25, 0.5, 0.8, 0.7]; // +x (toward the room), -x, top, bottom, +z (toward the camera), -z
+  function facadeGeometry(w, h, d) {
+    const geometry = new THREE.BoxGeometry(w, h, d);
+    const colors = new Float32Array(geometry.attributes.position.count * 3);
+    for (let face = 0; face < 6; face += 1) {
+      for (let v = face * 4; v < face * 4 + 4; v += 1) {
+        colors[v * 3] = FACE_SHADE[face];
+        colors[v * 3 + 1] = FACE_SHADE[face];
+        colors[v * 3 + 2] = FACE_SHADE[face];
+      }
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.clearGroups();
+    return geometry;
+  }
+  const capMaterial = {};
+  function tower(ring, x, z, w, d) {
+    const h = ring.hMin + rand() * (ring.hMax - ring.hMin);
+    const shade = new THREE.Color(ring.tint).multiplyScalar(0.8 + rand() * 0.45);
+    const body = new THREE.Mesh(facadeGeometry(w, h, d), new THREE.MeshBasicMaterial({ color: shade, vertexColors: true, fog: false }));
+    body.position.set(x, ground + h / 2, z);
+    group.add(body);
+    const tex = textures[Math.floor(rand() * textures.length)].clone();
+    tex.repeat.set(Math.max(1, Math.round(w / 1.6)), Math.max(1, Math.round(h / 3.2)));
+    tex.needsUpdate = true;
+    const windows = new THREE.Mesh(
+      new THREE.BoxGeometry(w + 0.02, h, d + 0.02),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: ring.glow, fog: false }),
+    );
+    windows.position.copy(body.position);
+    group.add(windows);
+    const r = rand();
+    if (r < 0.3) {
+      const w2 = w * (0.4 + rand() * 0.3);
+      const h2 = h * 0.12;
+      const setback = new THREE.Mesh(facadeGeometry(w2, h2, d * 0.6), body.material);
+      setback.position.set(x, ground + h + h2 / 2, z);
+      group.add(setback);
+    } else if (r < 0.45) {
+      const capH = 0.8 + rand() * 1.6;
+      capMaterial[ring.tint] = capMaterial[ring.tint] || new THREE.MeshBasicMaterial({ color: new THREE.Color(ring.tint).multiplyScalar(0.9), fog: false });
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(Math.min(w, d) * 0.62, capH, 4), capMaterial[ring.tint]);
+      cap.position.set(x, ground + h + capH / 2, z);
+      cap.rotation.y = Math.PI / 4;
+      group.add(cap);
+    } else if (r < 0.58) {
+      const mast = 0.8 + rand() * 2;
+      group.add(box(0.1, mast, 0.1, new THREE.MeshBasicMaterial({ color: 0x161a26, fog: false }), x, ground + h + mast / 2, z));
+      group.add(emissiveBox(0.16, 0.16, 0.16, 0xff4d7d, 3, x, ground + h + mast, z));
+    }
+    towers.push(body);
+    return body;
+  }
+  rings.forEach((ring) => {
+    // Lines of towers beyond the left wall (x = -3.2), running from behind the desk to well in front of it.
+    for (let z = -ring.far - 8; z < 22;) {
+      const w = ring.wMin + rand() * (ring.wMax - ring.wMin);
+      const d = ring.wMin + rand() * (ring.wMax - ring.wMin);
+      tower(ring, -3.2 - ring.near - rand() * (ring.far - ring.near) - w / 2, z + d / 2, w, d);
+      z += d + ring.gap + rand() * 2;
+    }
+  });
+
+  // Falling streaks of light between the towers: short vertical segments that
+  // drift down and wrap, in the window colours.
+  const RAIN = 220;
+  const positions = new Float32Array(RAIN * 6);
+  const colors = new Float32Array(RAIN * 6);
+  const drops = [];
+  const palette = WINDOW_COLORS.map((hex) => new THREE.Color(hex));
+  for (let i = 0; i < RAIN; i += 1) {
+    const x = -8 - rand() * 18;
+    const z = -14 + rand() * 30;
+    const drop = { x, z, y: -4 + rand() * 20, len: 0.2 + rand() * 0.5, speed: 1.0 + rand() * 2.0 };
+    drops.push(drop);
+    const c = palette[Math.floor(rand() * palette.length)];
+    for (let k = 0; k < 2; k += 1) {
+      colors[i * 6 + k * 3] = c.r;
+      colors[i * 6 + k * 3 + 1] = c.g;
+      colors[i * 6 + k * 3 + 2] = c.b;
+    }
+  }
+  const rainGeometry = new THREE.BufferGeometry();
+  rainGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  rainGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const rain = new THREE.LineSegments(rainGeometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.4, fog: false }));
+  rain.frustumCulled = false;
+  group.add(rain);
+  function updateRain(dt) {
+    for (let i = 0; i < RAIN; i += 1) {
+      const d = drops[i];
+      d.y -= d.speed * dt;
+      if (d.y < -6) d.y = 14 + Math.random() * 4;
+      positions[i * 6] = d.x;
+      positions[i * 6 + 1] = d.y;
+      positions[i * 6 + 2] = d.z;
+      positions[i * 6 + 3] = d.x;
+      positions[i * 6 + 4] = d.y + d.len;
+      positions[i * 6 + 5] = d.z;
+    }
+    rainGeometry.attributes.position.needsUpdate = true;
+  }
+  updateRain(0);
+
+  scene.add(group);
+  return { group, towers, updateRain };
+}
+
+// ---------------------------------------------------------------------------
 // Set dressing.
 
 function buildRoom(scene) {
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), standard(0xffffff, { map: floorTexture(), roughness: 0.95 }));
+  // The room stops at the glass wall (x = -3.2) and the back wall (z = -1.9):
+  // neither the floor nor the back wall continues outside, so through the
+  // glass there is only the city, down to the towers' feet.
+  const floorTex = floorTexture();
+  floorTex.repeat.set(10.2, 8.9);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(10.2, 8.9), standard(0xffffff, { map: floorTex, roughness: 0.95 }));
   floor.rotation.x = -Math.PI / 2;
+  floor.position.set(1.9, 0, 2.55);
   scene.add(floor);
+  // A slab under the floor, so the platform has an edge when seen from the glass.
+  scene.add(box(10.2, 0.4, 8.9, standard(0x0a0b10, { roughness: 1 }), 1.9, -0.2, 2.55));
 
   const wallMaterial = standard(PALETTE.wall, { roughness: 1 });
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(14, 5), wallMaterial);
-  back.position.set(0, 2.5, -1.9);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(10.2, 5), wallMaterial);
+  back.position.set(1.9, 2.5, -1.9);
   scene.add(back);
-  const left = new THREE.Mesh(new THREE.PlaneGeometry(8, 5), wallMaterial);
-  left.rotation.y = Math.PI / 2;
-  left.position.set(-3.2, 2.5, 1);
-  scene.add(left);
+
+  // The whole left wall (x = -3.2, z -3..5, floor to ceiling) is glass onto the city:
+  // one pane with slim posts only at the corners.
+  const frame = standard(0x14161d, { roughness: 0.6, metalness: 0.3 });
+  scene.add(box(0.1, 5, 0.1, frame, -3.2, 2.5, -1.9));
+  scene.add(box(0.1, 5, 0.1, frame, -3.2, 2.5, 5));
+  scene.add(box(0.14, 0.06, 6.9, frame, -3.2, 0.03, 1.55)); // floor track
+  scene.add(box(0.14, 0.06, 6.9, frame, -3.2, 4.97, 1.55)); // ceiling track
+  const glass = new THREE.Mesh(
+    new THREE.PlaneGeometry(6.9, 5),
+    new THREE.MeshStandardMaterial({ color: 0x9db4ff, transparent: true, opacity: 0.05, roughness: 0.1, metalness: 0.5, depthWrite: false }),
+  );
+  glass.rotation.y = Math.PI / 2;
+  glass.position.set(-3.2, 2.5, 1.55);
+  scene.add(glass);
+
+  const skyline = buildSkyline(scene);
 
   // Blocky background shapes.
-  scene.add(box(0.7, 1.7, 0.5, standard(PALETTE.shape), -3.1, 0.85, -1.6));
   scene.add(box(0.5, 0.5, 0.5, standard(PALETTE.shapeAlt), 1.25, 0.25, -1.5));
   scene.add(box(0.44, 0.44, 0.44, standard(PALETTE.shape), 1.28, 0.72, -1.52));
-  const tower = box(0.46, 1.1, 0.5, standard(PALETTE.shapeAlt), 1.95, 0.55, -1.55);
-  scene.add(tower);
+  scene.add(box(0.46, 1.1, 0.5, standard(PALETTE.shapeAlt), 1.95, 0.55, -1.55));
   for (let i = 0; i < 4; i += 1) {
     scene.add(emissiveBox(0.04, 0.02, 0.01, i % 2 ? PALETTE.blue : PALETTE.acid, 2.5, 1.8, 0.9 - i * 0.14, -1.295));
   }
@@ -200,6 +429,7 @@ function buildRoom(scene) {
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.set(-0.16, 0.003, 0.56);
   scene.add(shadow);
+  return skyline;
 }
 
 function buildDesk(scene) {
@@ -284,6 +514,7 @@ function buildMonitor(scene, screenTexture, yaw) {
     new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, depthTest: false }),
   );
   cursor.renderOrder = 2;
+  cursor.scale.setScalar(1.35);
   cursor.position.set(0.1, 0.5, 0.152);
   group.add(cursor);
 
@@ -513,7 +744,15 @@ export function startScene(canvas) {
       b && b.round_id, b && b.fetched_at, b && b.state, b && b.pending_activation,
       Number.isFinite(ends) ? Math.max(0, Math.ceil(ends - now)) : '',
       s.ready ? '' : Math.floor(now * 2) & 1,
+      pressView() ? `${anim.press.selected.join(',')}/${anim.press.pressing}/${anim.press.phase}/${anim.press.deployed ? 1 : 0}` : 'all',
     ].join('|');
+  }
+  // What the screen shows of the selection: the presses so far while the
+  // sequence plays, the whole pick on a still frame or before the first sequence.
+  function pressView() {
+    if (!anim.press.started || !anim.running) return null;
+    const p = anim.press;
+    return { selected: p.selected, pressing: p.pressing, recent: p.phase === 'gap' && p.index < p.queue.length ? p.queue[p.index] : null, deployed: p.deployed };
   }
   // Repaint and re-upload the 960x540 texture only when its content changed.
   function paintMonitor() {
@@ -521,7 +760,7 @@ export function startScene(canvas) {
     const key = monitorKey(now);
     if (key === lastKey) return;
     try {
-      drawMonitor(screenCtx, latestState, latestBoard, now);
+      drawMonitor(screenCtx, latestState, latestBoard, now, pressView());
       lastKey = key;
       screenTexture.needsUpdate = true;
     } catch (err) {
@@ -535,7 +774,7 @@ export function startScene(canvas) {
   scene.background = new THREE.Color(PALETTE.bg);
   scene.fog = new THREE.Fog(PALETTE.bg, 4.5, 11);
 
-  const camera = new THREE.PerspectiveCamera(32, DEFAULT_ASPECT, 0.1, 40);
+  const camera = new THREE.PerspectiveCamera(32, DEFAULT_ASPECT, 0.1, 160);
 
   scene.add(new THREE.HemisphereLight(0x3d55a8, 0x07070c, 0.55));
   const key = new THREE.DirectionalLight(0x8ab0ff, 1.9);
@@ -548,7 +787,7 @@ export function startScene(canvas) {
   fill.position.set(2.4, 1.3, 1.8);
   scene.add(fill);
 
-  buildRoom(scene);
+  const skyline = buildRoom(scene);
   buildDesk(scene);
 
   const monitorYaw = 0.5;
@@ -598,7 +837,7 @@ export function startScene(canvas) {
 
   // --- orbit ----------------------------------------------------------------
   const target = new THREE.Vector3(-0.3, 0.82, 0.12);
-  const orbit = { home: 0.68, drag: 0, sway: 0, velocity: 0, radius: 3.05, elevation: 0.25 };
+  const orbit = { home: 1.0, drag: 0, sway: 0, velocity: 0, radius: 3.05, elevation: 0.25 };
   function clampDrag() {
     if (orbit.drag < ORBIT_MIN) { orbit.drag = ORBIT_MIN; orbit.velocity = 0; }
     if (orbit.drag > ORBIT_MAX) { orbit.drag = ORBIT_MAX; orbit.velocity = 0; }
@@ -633,6 +872,10 @@ export function startScene(canvas) {
       height = h;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
+      // Keep the horizontal field of view of the default aspect, so a narrow
+      // canvas (a phone) shows the same width of the room, taller.
+      const halfH = Math.tan((32 / 2) * Math.PI / 180) * DEFAULT_ASPECT;
+      camera.fov = camera.aspect < DEFAULT_ASPECT ? 2 * Math.atan(halfH / camera.aspect) * 180 / Math.PI : 32;
       camera.updateProjectionMatrix();
       if (post) post.target.setSize(w, h);
     }
@@ -653,7 +896,10 @@ export function startScene(canvas) {
   let dragging = false;
 
   const anim = {
-    clickAt: -1, holdUntil: 0, wander: 0,
+    // The fly's cursor: where it is on the screen (canvas pixels) and the
+    // sequence of tiles it is pressing for the current observation.
+    cursor: new THREE.Vector2(START_RECT.x + START_RECT.w / 2, START_RECT.y + START_RECT.h / 2),
+    press: { queue: [], index: -1, phase: 'idle', phaseEnd: 0, t0: 0, dur: 0, from: new THREE.Vector2(), to: new THREE.Vector2(), selected: [], pressing: null, deployed: false, started: false, idleBase: new THREE.Vector2(), tick: null, idleSince: 0 },
     t: 0,
     burstUntil: 0,       // wing flutter
     shudderUntil: 0,     // aversive twitch
@@ -678,8 +924,90 @@ export function startScene(canvas) {
     }
   }
 
+  // --- pressing the tiles -----------------------------------------------------
+  // On each observation the cursor visits the chosen tiles in order, clicking
+  // each (the tile lights up as it is pressed), then presses START. Between
+  // observations it idles near where it stopped.
+  const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+  function startPresses(tiles, t, tick) {
+    const press = anim.press;
+    press.tick = tick;
+    press.queue = tiles.filter((n) => Number.isInteger(n) && n >= 1 && n <= 21);
+    press.index = -1;
+    press.selected = [];
+    press.pressing = null;
+    press.deployed = false;
+    press.started = true;
+    press.phase = 'gap';
+    press.phaseEnd = t + 0.8;
+    lastKey = '';
+  }
+  function moveTo(target, t) {
+    const press = anim.press;
+    press.from.copy(anim.cursor);
+    press.to.set(target.x, target.y);
+    press.dur = 0.45 + press.from.distanceTo(press.to) / 700;
+    press.t0 = t;
+    press.phase = 'move';
+  }
+  function advancePresses(t) {
+    const press = anim.press;
+    if (press.phase === 'idle') {
+      // A slow drift, like a hand resting on the mouse; after a pause the fly
+      // runs through its picks again, so the clicking is always on show.
+      anim.cursor.set(press.idleBase.x + 14 * Math.sin(t * 0.6), press.idleBase.y + 9 * Math.sin(t * 0.9 + 1));
+      if (press.queue.length && t - press.idleSince > 6) startPresses(press.queue, t, press.tick);
+      return false;
+    }
+    if (press.phase === 'gap' && t >= press.phaseEnd) {
+      press.index += 1;
+      if (press.index < press.queue.length) moveTo(tileCenter(press.queue[press.index]), t);
+      else if (press.index === press.queue.length && press.queue.length) moveTo({ x: START_RECT.x + START_RECT.w / 2, y: START_RECT.y + START_RECT.h / 2 }, t);
+      else { press.phase = 'idle'; press.idleBase.copy(anim.cursor); press.idleSince = t; }
+      return false;
+    }
+    if (press.phase === 'move') {
+      const p = Math.min(1, (t - press.t0) / press.dur);
+      anim.cursor.lerpVectors(press.from, press.to, ease(p));
+      if (p >= 1) { press.phase = 'hold'; press.phaseEnd = t + 0.3; }
+      return false;
+    }
+    if (press.phase === 'hold' && t >= press.phaseEnd) {
+      press.phase = 'click';
+      press.phaseEnd = t + 0.35;
+      if (press.index < press.queue.length) {
+        press.pressing = press.queue[press.index];
+        press.selected = press.selected.concat(press.pressing);
+      } else {
+        press.deployed = true;
+      }
+      return true; // the screen changes now
+    }
+    if (press.phase === 'click' && t >= press.phaseEnd) {
+      press.pressing = null;
+      press.phase = 'gap';
+      press.phaseEnd = t + (press.index < press.queue.length ? 0.45 : 0.8);
+      return true;
+    }
+    return false;
+  }
+  // Canvas pixels -> a point just in front of the screen plane, in the monitor's frame.
+  function cursorToScreen(px, py, out) {
+    out.set(
+      monitor.screenCenter.x + (px / MONITOR_WIDTH - 0.5) * monitor.screenSize.w,
+      monitor.screenCenter.y + (0.5 - py / MONITOR_HEIGHT) * monitor.screenSize.h,
+      monitor.screenCenter.z + 0.005,
+    );
+    return out;
+  }
+
   function animate(t, dt) {
     anim.t = t;
+    const shown = latestState && latestState.tick != null ? latestState.tick : null;
+    const tiles = latestState && latestState.neural && Array.isArray(latestState.neural.tiles) ? latestState.neural.tiles : null;
+    if (shown !== null && shown !== anim.press.tick && tiles) startPresses(tiles, t, shown);
+    if (advancePresses(t)) paintMonitor();
+    skyline.updateRain(dt);
     // Camera sway around home; the user's drag offset is added on top.
     orbit.sway = 0.2 * Math.sin(t * 0.14);
     if (!dragging && Math.abs(orbit.velocity) > 1e-4) {
@@ -704,22 +1032,17 @@ export function startScene(canvas) {
     fly.head.rotation.x = 0.06 * Math.sin(t * 0.9);
     fly.group.rotation.z = shudder * 0.6;
 
-    // Mouse: wanders the pad on a slow Lissajous path, with a pause and a
-    // click (dip) on each new observation. The cursor mirrors it on the screen.
-    const clickAge = t - anim.clickAt;
-    const clicking = clickAge >= 0 && clickAge < 0.18;
-    if (t >= anim.holdUntil) anim.wander += dt;
-    const wander = anim.wander;
-    const mx = 0.075 * Math.sin(wander * 0.9) + 0.03 * Math.sin(wander * 2.3 + 1.0);
-    const mz = 0.05 * Math.sin(wander * 0.7 + 0.8) + 0.025 * Math.sin(wander * 1.7);
-    scratch.mouseXY.set(mx, mz);
+    // The cursor is where the sequence put it; the mouse on the pad follows it
+    // (screen x -> pad x, screen down -> pad toward the fly), the click dips.
+    const clicking = anim.press.phase === 'click';
+    const nx = (anim.cursor.x / MONITOR_WIDTH - 0.5) * 2;
+    const ny = (0.5 - anim.cursor.y / MONITOR_HEIGHT) * 2;
+    const mx = nx * 0.1;
+    const mz = -ny * 0.07;
     scratch.local.set(mx, 0, mz).applyAxisAngle(UP, mouse.yaw);
     mouse.group.position.copy(mouse.home).add(scratch.local);
     mouse.group.rotation.y = mouse.yaw + 0.35 * mx;
-    // Screen coordinates: pad x -> screen x, pad z (toward the fly) -> screen down.
-    const sx = clamp(mx / 0.105, -1, 1) * monitor.screenSize.w * 0.46;
-    const sy = -clamp(mz / 0.075, -1, 1) * monitor.screenSize.h * 0.42;
-    monitor.cursor.position.set(monitor.screenCenter.x + sx, monitor.screenCenter.y + sy + 0.02, monitor.screenCenter.z + 0.005);
+    cursorToScreen(anim.cursor.x, anim.cursor.y, monitor.cursor.position);
     monitor.cursor.material.color.setHex(clicking ? PALETTE.acid : 0xffffff);
 
     // Front legs: the left one types on the keyboard, the right one holds the mouse.
@@ -915,6 +1238,8 @@ export function startScene(canvas) {
       paintMonitor();
     }
 
+    if (!anim.running) kick();
+
     // React to a new observation; decorative only. The flash, flutter and
     // shudder are transients, so they only start while the loop can play them.
     const tick = latestState && latestState.tick != null ? latestState.tick : null;
@@ -923,9 +1248,6 @@ export function startScene(canvas) {
       const first = anim.lastTick === null;
       anim.lastTick = tick;
       if (!first && anim.running) {
-        // The fly clicks: the mouse stops for a moment and the cursor blinks.
-        anim.clickAt = anim.t;
-        anim.holdUntil = anim.t + 0.9;
         if (neural.stimulus === 'reward') {
           anim.burstUntil = anim.t + 1.2;
           anim.flash = 1;
@@ -942,7 +1264,6 @@ export function startScene(canvas) {
     }
     const running = !!(latestState && latestState.status && latestState.status.running);
     monitor.led.material.emissive.set(running ? PALETTE.acid : PALETTE.red);
-    if (!anim.running) kick();
   }
 
   function setPaused(value) {

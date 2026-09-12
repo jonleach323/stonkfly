@@ -288,33 +288,36 @@ details.perf[open] summary { margin-bottom: 12px; }
 
 /* ---------- how it works ---------- */
 .how-head { padding-block: 28px 8px; max-width: 760px; }
-.how-head h2 { font: 18px/1.4 var(--pixel); margin: 0 0 12px; }
+.how-head h2 { font: 22px/1.4 var(--pixel); margin: 10px 0 12px; }
+.how-head h2 .dot { color: var(--acid); }
 .lede { font-size: 15px; margin: 0; color: var(--ink); }
+.back-link { font: 8px/2.4 var(--pixel); color: var(--muted); text-decoration: none; text-transform: uppercase; }
+.back-link:hover { color: var(--acid); }
+.how-foot { margin: 20px 0 0; text-align: right; }
 .steps { list-style: none; margin: 20px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
 @media (min-width: 820px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .step { height: 100%; }
-.step-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
-.step-no { font: 18px/1 var(--pixel); color: var(--acid); }
-.step h2 { font: 12px/1.4 var(--pixel); }
-.step h3 { font: 700 15px/1.3 var(--mono); margin: 12px 0 6px; }
+.step-label { display: flex; justify-content: space-between; gap: 12px; font: 8px/1.8 var(--pixel); margin-bottom: 12px; color: var(--acid); text-transform: uppercase; }
+.step-label span + span { color: var(--muted); text-align: right; }
+.step h3 { font: 12px/1.6 var(--pixel); margin: 14px 0 8px; color: var(--ink); }
 .step p { margin: 0; color: var(--muted); }
 .step p strong { color: var(--ink); }
-.fig { margin: 0; border: 2px solid var(--line); background: var(--bg); padding: 12px; }
-.fig svg { width: 100%; height: auto; max-height: 200px; display: block; }
-.figtext { font: 7px var(--pixel); letter-spacing: .02em; }
-.monitor { margin: 0; }
-.screen { border: 6px solid var(--line); background: #000; padding: 6px; box-shadow: var(--shadow); width: fit-content; max-width: 100%; }
-.screen img { display: block; width: 320px; max-width: 100%; height: auto; image-rendering: pixelated; }
-.screen-empty { margin: 0; width: 320px; max-width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; font: 9px var(--pixel); color: var(--muted); }
-.monitor-stand { width: 90px; height: 8px; background: var(--line); margin: 6px 0 0 60px; box-shadow: 30px 8px 0 -0px var(--line), -30px 8px 0 0 var(--line), 0 8px 0 0 var(--line); }
-.monitor figcaption { font: 8px/1.8 var(--pixel); color: var(--muted); margin-top: 20px; text-transform: uppercase; }
-.note { margin-top: 24px; border-color: var(--acid); box-shadow: 3px 3px 0 var(--acid); }
-.note h2 { font: 12px/1.6 var(--pixel); color: var(--acid); margin: 0 0 10px; }
-.note ul { margin: 0; padding-left: 20px; color: var(--ink); }
-.note li { margin: 6px 0; }
-.note-links { margin: 14px 0 0; font: 8px/1.8 var(--pixel); text-transform: uppercase; color: var(--muted); }
-.note-links a { display: inline-block; padding-block: 7px 5px; color: var(--ink); text-decoration: none; border-bottom: 2px solid var(--line); }
-.note-links a:hover { border-color: var(--acid); }
+.fig { margin: 0; border: 2px solid var(--line); background: var(--bg); padding: 14px; }
+.fig svg { width: 100%; height: auto; display: block; }
+.fig figcaption { font: 8px/1.8 var(--pixel); color: var(--muted); margin-top: 12px; text-transform: uppercase; }
+.diagram-small { font: 9px var(--pixel); letter-spacing: .02em; }
+.sensory-fig { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; align-items: end; }
+.sensory-fig figcaption { grid-column: 1 / -1; }
+.pixel-monitor { width: fit-content; max-width: 100%; }
+.monitor-head { display: flex; gap: 4px; padding: 4px 6px; border: 4px solid var(--line); border-bottom: 0; background: var(--panel); }
+.monitor-head i { width: 6px; height: 6px; background: var(--line); }
+.monitor-head i:first-child { background: var(--acid); }
+.pixel-monitor img { display: block; width: 320px; max-width: 100%; height: auto; image-rendering: pixelated; border: 4px solid var(--line); background: #000; }
+.screen-empty { margin: 0; width: 320px; max-width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; font: 9px var(--pixel); color: var(--muted); border: 4px solid var(--line); }
+.monitor-stand { width: 90px; height: 8px; background: var(--line); margin: 6px 0 0 60px; box-shadow: 30px 8px 0 0 var(--line), -30px 8px 0 0 var(--line), 0 8px 0 0 var(--line); }
+.pixel-eye { display: grid; justify-items: center; gap: 4px; font: 7px/1.8 var(--pixel); color: var(--muted); }
+.pixel-eye svg { width: 108px; height: 104px; }
+@media (max-width: 480px) { .sensory-fig { grid-template-columns: minmax(0, 1fr); } .pixel-eye { justify-self: start; } }
 
 /* ---------- footer ---------- */
 .foot {

@@ -9,7 +9,9 @@ import hashlib
 import json
 import os
 import secrets
+import shutil
 import sqlite3
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -38,22 +40,62 @@ BLOB_MAX_AGE = 60
 FRAME_MAX_AGE = 31536000  # content-addressed frames never change
 
 
-def _open_readonly(path):
-    """Open the ledger without ever writing to it.
+_COPIES = {}  # ledger path -> (stamp, copy path) for read-only mounts, see _open_readonly
 
-    The ledger is in WAL mode. A read-only connection to a WAL database needs
-    the -shm file, which SQLite creates on demand; on a read-only filesystem
-    (the watch container mounts the run directory `:ro`) that fails whenever the
-    worker's own connection is closed (stopped, halted, building the graph on
-    start). Without a -wal file there is nothing un-checkpointed, so an
-    `immutable=1` open then reads exactly the committed data.
+
+def _stamp(path):
+    files = []
+    for suffix in ("", "-wal"):
+        try:
+            st = os.stat(f"{path}{suffix}")
+            files.append((suffix, st.st_size, st.st_mtime_ns))
+        except FileNotFoundError:
+            pass
+    return tuple(files)
+
+
+def _open_readonly(path):
+    """Open the ledger without ever writing to the run directory.
+
+    The ledger is in WAL mode, and a read-only connection to a WAL database
+    needs the -shm file, which SQLite creates on demand. On a read-only
+    filesystem (the watch container mounts the run directory `:ro`) that fails
+    with "unable to open database file" whenever the file is missing: the
+    worker is stopped, halted, or reloading the graph on start, or its last
+    close could not checkpoint. Two exact fallbacks, both leaving the run
+    directory untouched:
+
+    - no -wal file: nothing is un-checkpointed, so `immutable=1` reads the
+      committed data as is;
+    - a -wal file: copy the database and its WAL to a private temporary
+      directory (cached by size and mtime) and open the copy, which lets SQLite
+      recover the WAL there. WAL frames carry checksums, so a copy taken while
+      the worker writes is read up to the last complete frame.
     """
+    path = Path(path)
+    db = None
     try:
-        return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        db.execute("PRAGMA schema_version").fetchone()  # opening is lazy: this is where the -shm is needed
+        return db
     except sqlite3.OperationalError:
-        if Path(f"{path}-wal").exists():
-            raise
+        if db is not None:
+            db.close()
+    wal = Path(f"{path}-wal")
+    if not wal.exists():
         return sqlite3.connect(f"file:{path}?mode=ro&immutable=1", uri=True)
+    stamp = _stamp(path)
+    cached = _COPIES.get(str(path))
+    if cached is None or cached[0] != stamp:
+        folder = Path(tempfile.mkdtemp(prefix="stonkfly-ledger-"))
+        copy = folder / path.name
+        shutil.copyfile(path, copy)
+        shutil.copyfile(wal, f"{copy}-wal")
+        if cached is not None:
+            shutil.rmtree(cached[1].parent, ignore_errors=True)
+        _COPIES[str(path)] = (stamp, copy)
+        cached = _COPIES[str(path)]
+    return sqlite3.connect(f"file:{cached[1]}?mode=ro", uri=True)
 
 
 def _read_meta(path):

@@ -418,6 +418,7 @@ function renderStack(s) {
     }
   }
   setText("value-unit", s.mode === "live" ? "USDC · LIVE WALLET" : "USDC · SIMULATED");
+  setText("how-execution", s.mode === "live" ? "LIVE · DEPLOYS GO TO SOLANA FROM A DEDICATED WALLET" : "PAPER · SETTLED FROM THE REAL WINNING TILE, NOTHING SENT");
   const pnl = $("pnl");
   if (pnl) {
     pnl.textContent = `${fmtMoney(p.pnl, { sign: true })} · ${fmtPct(p.pnl_percent)}`;

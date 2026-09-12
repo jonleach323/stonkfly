@@ -42,7 +42,7 @@
     <a href="#how-it-works" data-view-link="how">HOW IT WORKS</a>
   </nav>
 </header>
-<noscript><p class="fine nojs">JavaScript is off: the live numbers on this page will not load. The mechanism and the caveats are under HOW IT WORKS below.</p></noscript>
+<noscript><p class="fine nojs">JavaScript is off. No live numbers. HOW IT WORKS still reads.</p></noscript>
 
 <main id="main">
 
@@ -63,7 +63,7 @@
         <pre class="ascii-fly" aria-hidden="true">   \ /
  -=(o)=-
    / \</pre>
-        <p><b id="stage-fallback-title">3D VIEW OFF</b><br><span>The avatar is decorative. The numbers below are the experiment.</span></p>
+        <p><b id="stage-fallback-title">3D VIEW OFF</b><br><span>The fly is decorative. The numbers are live.</span></p>
       </div>
       <p class="stage-caption" id="stage-caption">DRAG OR ARROW KEYS TO ORBIT</p>
     </div>
@@ -83,13 +83,13 @@
       <ol class="minigrid" id="minigrid" aria-label="The 21 tiles; lit tiles are the fly's latest proposal"></ol>
       <p class="pick-line"><span class="chip" id="pick-status">WAITING</span> <span id="pick-tiles">WAITING FOR WORKER</span></p>
       <p class="stimulus" id="stimulus" aria-live="polite">—</p>
-      <p class="fine">Fixed readout: 21 pre-registered groups of descending neurons, one per tile. A group firing above its own running average, beyond the median, proposes its tile. Not a strategy; no readout of a random draw is profitable on average.</p>
+      <p class="fine">Fixed readout. 21 groups of descending neurons, one per tile. The groups firing above their usual rate light up. Not a strategy.</p>
     </section>
   </section>
 
   <section class="account" aria-labelledby="stack-title">
     <div class="stack-head">
-      <h2 id="stack-title">THE STACK</h2>
+      <h2 id="stack-title">THE BAG</h2>
       <span class="chip" id="fresh-chip">WAITING FOR WORKER</span>
     </div>
 
@@ -135,7 +135,7 @@
       <div><dt>TILE HITS / ROUNDS</dt><dd class="num" id="h-rounds">—</dd></div>
       <div><dt>HIT RATE</dt><dd class="num" id="h-hit">—</dd></div>
     </dl>
-    <p class="fine holdings-note">A hit means the winning tile was among the picks; picking k of 21 tiles hits k/21 of rounds by chance. A hit is not a profit: the 6% fee and the 11% haircut on missed tiles come off first.</p>
+    <p class="fine holdings-note">A hit: the winning tile was among the picks. Ten picks hit 10 rounds in 21 by luck. A hit is not a profit. Fees come first.</p>
   </section>
 
   <section class="panel activity" aria-labelledby="activity-title">
@@ -165,7 +165,7 @@
   </section>
 
   <details class="panel perf" id="perf">
-    <summary><h2>PERFORMANCE &amp; LIMITS</h2><span class="chip" id="perf-chip">—</span></summary>
+    <summary><h2>PERFORMANCE &amp; ANTI-REKT LIMITS</h2><span class="chip" id="perf-chip">—</span></summary>
     <div class="perf-body">
       <figure class="chart">
         <svg id="equity-chart" viewBox="0 0 640 220" role="img" aria-label="Equity over time" aria-describedby="chart-caption"></svg>
@@ -180,7 +180,7 @@
           <div><dt>BEST ROUND</dt><dd class="num" id="s-best">—</dd></div>
         </dl>
         <p class="limits" id="limits">$1 / ROUND · 300 DEPLOYS / DAY · 1 DEPLOY PER ROUND · LOSS STOP $20</p>
-        <p class="fine">Fees make every deploy negative in expectation. The loss stop halts new deploys; it does not cancel a round in progress or cap the game's fees.</p>
+        <p class="fine">Every deploy is negative in expectation. The loss stop halts new deploys. Deploys are never forced.</p>
       </div>
     </div>
   </details>
@@ -191,120 +191,115 @@
 <!-- ========================= HOW IT WORKS ========================= -->
 <section id="how-it-works" class="view" aria-label="How it works" hidden>
   <header class="how-head">
-    <h2>HOW IT WORKS</h2>
-    <p class="lede">Every round the public SatRush board is drawn as a 320×180 picture, shown to a spiking network wired from a fly connectome, and a fixed readout turns descending-neuron spikes into a tile choice. That is the whole mechanism. There is no strategy layer, and none could beat a random draw.</p>
+    <a class="back-link" href="#watch">&lt; BACK TO THE FLY</a>
+    <h2>HOW IT WORKS<span class="dot">.</span></h2>
+    <p class="lede">A real wiring diagram. Approximate neurons. An engineered game interface.</p>
   </header>
 
   <ol class="steps">
     <li>
       <article class="panel step" aria-labelledby="step1-title">
-        <header class="step-head"><span class="step-no" aria-hidden="true">01</span><h2 id="step1-title">INPUT</h2></header>
-        <figure class="monitor">
-          <div class="screen"><img id="sensory" src="/api/sensory.png" width="320" height="180" alt="The exact 320 by 180 pixel board image the retina last received: 21 shaded tiles, recent winners outlined, the pot, the miner count and a countdown bar"><p class="screen-empty" id="sensory-empty" hidden>NO FRAME YET</p></div>
-          <div class="monitor-stand" aria-hidden="true"></div>
-          <figcaption>THE FRAME THE RETINA LAST RECEIVED · <span id="sensory-meta">—</span></figcaption>
+        <div class="step-label"><span id="step1-title">01 / INPUT</span><span>21 TILES · 1 BOARD</span></div>
+        <figure class="fig sensory-fig">
+          <div class="pixel-monitor">
+            <div class="monitor-head" aria-hidden="true"><i></i><i></i><i></i></div>
+            <img id="sensory" src="/api/sensory.png" width="320" height="180" alt="The 320 by 180 pixel board image the retina last received">
+            <p class="screen-empty" id="sensory-empty" hidden>WAITING FOR A FRAME</p>
+            <div class="monitor-stand" aria-hidden="true"></div>
+          </div>
+          <div class="pixel-eye" aria-hidden="true">
+            <svg viewBox="0 0 108 104" shape-rendering="crispEdges"><rect x="12" y="18" width="8" height="8" fill="#f3f4ed"/><rect x="24" y="18" width="8" height="8" fill="#445369"/><rect x="36" y="18" width="8" height="8" fill="#bdff32"/><rect x="48" y="18" width="8" height="8" fill="#bdff32"/><rect x="60" y="18" width="8" height="8" fill="#7376ff"/><rect x="72" y="18" width="8" height="8" fill="#f3f4ed"/><rect x="84" y="18" width="8" height="8" fill="#445369"/><rect x="12" y="30" width="8" height="8" fill="#7376ff"/><rect x="24" y="30" width="8" height="8" fill="#445369"/><rect x="36" y="30" width="8" height="8" fill="#bdff32"/><rect x="48" y="30" width="8" height="8" fill="#bdff32"/><rect x="60" y="30" width="8" height="8" fill="#f3f4ed"/><rect x="72" y="30" width="8" height="8" fill="#7376ff"/><rect x="84" y="30" width="8" height="8" fill="#445369"/><rect x="12" y="42" width="8" height="8" fill="#7376ff"/><rect x="24" y="42" width="8" height="8" fill="#445369"/><rect x="36" y="42" width="8" height="8" fill="#bdff32"/><rect x="48" y="42" width="8" height="8" fill="#f3f4ed"/><rect x="60" y="42" width="8" height="8" fill="#7376ff"/><rect x="72" y="42" width="8" height="8" fill="#7376ff"/><rect x="84" y="42" width="8" height="8" fill="#445369"/><rect x="12" y="54" width="8" height="8" fill="#7376ff"/><rect x="24" y="54" width="8" height="8" fill="#445369"/><rect x="36" y="54" width="8" height="8" fill="#f3f4ed"/><rect x="48" y="54" width="8" height="8" fill="#bdff32"/><rect x="60" y="54" width="8" height="8" fill="#7376ff"/><rect x="72" y="54" width="8" height="8" fill="#7376ff"/><rect x="84" y="54" width="8" height="8" fill="#445369"/><rect x="12" y="66" width="8" height="8" fill="#7376ff"/><rect x="24" y="66" width="8" height="8" fill="#f3f4ed"/><rect x="36" y="66" width="8" height="8" fill="#bdff32"/><rect x="48" y="66" width="8" height="8" fill="#bdff32"/><rect x="60" y="66" width="8" height="8" fill="#7376ff"/><rect x="72" y="66" width="8" height="8" fill="#7376ff"/><rect x="84" y="66" width="8" height="8" fill="#f3f4ed"/><rect x="12" y="78" width="8" height="8" fill="#f3f4ed"/><rect x="24" y="78" width="8" height="8" fill="#445369"/><rect x="36" y="78" width="8" height="8" fill="#bdff32"/><rect x="48" y="78" width="8" height="8" fill="#bdff32"/><rect x="60" y="78" width="8" height="8" fill="#7376ff"/><rect x="72" y="78" width="8" height="8" fill="#f3f4ed"/><rect x="84" y="78" width="8" height="8" fill="#445369"/></svg>
+            <span>INPUT PROXY</span>
+          </div>
+          <figcaption id="sensory-meta">LATEST SENSORY IMAGE</figcaption>
         </figure>
-        <h3>The fly gets the pixels.</h3>
-        <p>The board (21 tiles shaded by stake, the last five winners outlined, pot, miner count and countdown) is rendered locally as RGB. Its pixels drive <strong>3,335 brightness inputs</strong> (R1–R6 cells) and <strong>811 R8 color inputs</strong>. The frame never shows this wallet's balance, its own picks or its results. The simulator sees pixels, not tile numbers or odds.</p>
+        <h3>THE FLY GETS THE PIXELS.</h3>
+        <p>Each round the live board becomes a 320×180 image. Its pixels stimulate <strong>3,335 brightness inputs and 811 R8 color inputs</strong>. The fly sees pixels, not odds.</p>
       </article>
     </li>
     <li>
       <article class="panel step" aria-labelledby="step2-title">
-        <header class="step-head"><span class="step-no" aria-hidden="true">02</span><h2 id="step2-title">NETWORK</h2></header>
+        <div class="step-label"><span id="step2-title">02 / NETWORK</span><span>25.6M CONNECTIONS</span></div>
         <figure class="fig">
-          <svg viewBox="0 0 240 120" role="img" aria-label="Pixel diagram: input cells on the left connect through many cells to output cells on the right" shape-rendering="crispEdges">
-            <g stroke="#32353e" stroke-width="2" fill="none">
-              <path d="M14 60H36V22H62M36 60V98H62M62 22V46H92M62 98V74H92M92 46V16H122M92 46V74M92 74V104H122M122 16V38H150M122 104V82H150M150 38V60H182M150 82V60M182 60V22H212M182 60V98H212"/>
-              <path d="M62 46V74M122 38V82M36 22H80V46M80 74H150"/>
+          <svg viewBox="0 0 440 210" role="img" aria-label="Schematic of connected model neurons and a spike trace; not measured activity" shape-rendering="crispEdges">
+            <g fill="none" stroke="#32353e" stroke-width="2"><path d="M50 55H105V30H150M50 100H85V75H150M50 145H105V120H150M150 30H195V80H230M150 75H195V125H230M150 120H180V165H230M230 80H280V40H330M230 125H290V105H330M230 165H290V150H330M330 40H380V95H405M330 105H405M330 150H380V105"/></g>
+            <g fill="none" stroke="#bdff32" stroke-width="3"><path d="M50 100H85V75H150M150 75H195V125H230M230 125H290V105H330M330 105H405"/></g>
+            <g id="net-nodes">
+              <rect x="42" y="47" width="16" height="16" fill="#989aaa"/><rect x="42" y="92" width="16" height="16" fill="#bdff32"/><rect x="42" y="137" width="16" height="16" fill="#989aaa"/>
+              <rect x="142" y="22" width="16" height="16" fill="#989aaa"/><rect x="142" y="67" width="16" height="16" fill="#bdff32"/><rect x="142" y="112" width="16" height="16" fill="#989aaa"/>
+              <rect x="222" y="72" width="16" height="16" fill="#989aaa"/><rect x="222" y="117" width="16" height="16" fill="#bdff32"/><rect x="222" y="157" width="16" height="16" fill="#989aaa"/>
+              <rect x="322" y="32" width="16" height="16" fill="#989aaa"/><rect x="322" y="97" width="16" height="16" fill="#bdff32"/><rect x="322" y="142" width="16" height="16" fill="#989aaa"/>
+              <rect x="397" y="92" width="16" height="16" fill="#bdff32"/>
             </g>
-            <g fill="#7376ff">
-              <rect x="10" y="56" width="8" height="8"/><rect x="32" y="18" width="8" height="8"/><rect x="32" y="94" width="8" height="8"/>
+            <g fill="#060709">
+              <rect x="47" y="52" width="6" height="6"/><rect x="47" y="97" width="6" height="6"/><rect x="47" y="142" width="6" height="6"/>
+              <rect x="147" y="27" width="6" height="6"/><rect x="147" y="72" width="6" height="6"/><rect x="147" y="117" width="6" height="6"/>
+              <rect x="227" y="77" width="6" height="6"/><rect x="227" y="122" width="6" height="6"/><rect x="227" y="162" width="6" height="6"/>
+              <rect x="327" y="37" width="6" height="6"/><rect x="327" y="102" width="6" height="6"/><rect x="327" y="147" width="6" height="6"/>
+              <rect x="402" y="97" width="6" height="6"/>
             </g>
-            <g fill="#989aaa">
-              <rect x="58" y="18" width="8" height="8"/><rect x="58" y="42" width="8" height="8"/><rect x="58" y="70" width="8" height="8"/><rect x="58" y="94" width="8" height="8"/>
-              <rect x="88" y="12" width="8" height="8"/><rect x="88" y="42" width="8" height="8"/><rect x="88" y="70" width="8" height="8"/><rect x="88" y="100" width="8" height="8"/>
-              <rect x="118" y="12" width="8" height="8"/><rect x="118" y="34" width="8" height="8"/><rect x="118" y="78" width="8" height="8"/><rect x="118" y="100" width="8" height="8"/>
-              <rect x="146" y="34" width="8" height="8"/><rect x="146" y="78" width="8" height="8"/>
-            </g>
-            <g fill="#f3f4ed">
-              <rect x="76" y="42" width="8" height="8"/><rect x="178" y="56" width="8" height="8"/>
-            </g>
-            <g fill="#bdff32">
-              <rect x="208" y="18" width="8" height="8"/><rect x="208" y="94" width="8" height="8"/>
-              <rect x="44" y="60" width="4" height="4"/><rect x="102" y="46" width="4" height="4"/><rect x="164" y="60" width="4" height="4"/>
-            </g>
-            <text x="8" y="116" class="figtext" fill="#7376ff">RETINA</text>
-            <text x="232" y="116" class="figtext" fill="#bdff32" text-anchor="end">DN GROUPS</text>
+            <path d="M40 192h60v-18h6v30h6v-12h51v-18h6v30h6v-12h65v-18h6v30h6v-12h40" fill="none" stroke="#7376ff" stroke-width="2"/>
+            <text x="20" y="24" class="diagram-small" fill="#7376ff">RETINA</text>
+            <text x="420" y="84" class="diagram-small" fill="#bdff32" text-anchor="end">DN</text>
+            <text x="352" y="197" class="diagram-small" fill="#989aaa">SPIKES</text>
           </svg>
+          <figcaption>SIMPLIFIED WIRING DIAGRAM</figcaption>
         </figure>
-        <h3>Spikes run through the whole retained graph.</h3>
-        <p><strong>MaleCNS v1.0</strong>: <strong>166,700 cells</strong> and <strong>25.6M connections</strong>, integrated as leaky integrate-and-fire neurons at 0.1 ms with a coarse transmitter-sign proxy. Each observation advances 500 ms of neural time inside a round of about 63 s. The wiring comes from a real reconstruction of a male fly's brain and nerve cord; the physiology is a coarse approximation, and nothing is pruned.</p>
+        <h3>THE NETWORK FIRES.</h3>
+        <p><strong>MaleCNS v1.0</strong> wires 166,700 simulated cells. Approximate electrical dynamics make them spike, and spikes spread down the wiring to the descending neurons.</p>
       </article>
     </li>
     <li>
       <article class="panel step" aria-labelledby="step3-title">
-        <header class="step-head"><span class="step-no" aria-hidden="true">03</span><h2 id="step3-title">ACTION</h2></header>
+        <div class="step-label"><span id="step3-title">03 / ACTION</span><span>SOLANA · DEPLOYPUBLIC</span></div>
         <figure class="fig">
-          <svg viewBox="0 0 240 120" role="img" aria-label="Pixel diagram: a 7 by 3 tile grid with some tiles lit, an arrow to a guard box, an arrow to a chain of blocks labelled one deploy" shape-rendering="crispEdges">
+          <svg viewBox="0 0 440 210" role="img" aria-label="Lit tiles from the readout pass through a guard that can only veto, then become one deploy" shape-rendering="crispEdges">
+            <text x="26" y="28" class="diagram-small" fill="#989aaa">FIXED NEURAL READOUT</text>
             <g id="fig-tiles">
-              <rect x="6" y="42" width="10" height="10" fill="#32353e"/><rect x="18" y="42" width="10" height="10" fill="#32353e"/><rect x="30" y="42" width="10" height="10" fill="#bdff32"/><rect x="42" y="42" width="10" height="10" fill="#32353e"/><rect x="54" y="42" width="10" height="10" fill="#bdff32"/><rect x="66" y="42" width="10" height="10" fill="#bdff32"/><rect x="78" y="42" width="10" height="10" fill="#32353e"/>
-              <rect x="6" y="54" width="10" height="10" fill="#bdff32"/><rect x="18" y="54" width="10" height="10" fill="#32353e"/><rect x="30" y="54" width="10" height="10" fill="#32353e"/><rect x="42" y="54" width="10" height="10" fill="#32353e"/><rect x="54" y="54" width="10" height="10" fill="#bdff32"/><rect x="66" y="54" width="10" height="10" fill="#32353e"/><rect x="78" y="54" width="10" height="10" fill="#bdff32"/>
-              <rect x="6" y="66" width="10" height="10" fill="#bdff32"/><rect x="18" y="66" width="10" height="10" fill="#32353e"/><rect x="30" y="66" width="10" height="10" fill="#32353e"/><rect x="42" y="66" width="10" height="10" fill="#bdff32"/><rect x="54" y="66" width="10" height="10" fill="#32353e"/><rect x="66" y="66" width="10" height="10" fill="#bdff32"/><rect x="78" y="66" width="10" height="10" fill="#bdff32"/>
+              <rect x="26" y="42" width="18" height="18" fill="#32353e"/><rect x="48" y="42" width="18" height="18" fill="#bdff32"/><rect x="70" y="42" width="18" height="18" fill="#32353e"/><rect x="92" y="42" width="18" height="18" fill="#bdff32"/><rect x="114" y="42" width="18" height="18" fill="#bdff32"/><rect x="136" y="42" width="18" height="18" fill="#32353e"/><rect x="158" y="42" width="18" height="18" fill="#32353e"/>
+              <rect x="26" y="64" width="18" height="18" fill="#bdff32"/><rect x="48" y="64" width="18" height="18" fill="#32353e"/><rect x="70" y="64" width="18" height="18" fill="#32353e"/><rect x="92" y="64" width="18" height="18" fill="#bdff32"/><rect x="114" y="64" width="18" height="18" fill="#32353e"/><rect x="136" y="64" width="18" height="18" fill="#bdff32"/><rect x="158" y="64" width="18" height="18" fill="#32353e"/>
+              <rect x="26" y="86" width="18" height="18" fill="#32353e"/><rect x="48" y="86" width="18" height="18" fill="#bdff32"/><rect x="70" y="86" width="18" height="18" fill="#bdff32"/><rect x="92" y="86" width="18" height="18" fill="#32353e"/><rect x="114" y="86" width="18" height="18" fill="#32353e"/><rect x="136" y="86" width="18" height="18" fill="#bdff32"/><rect x="158" y="86" width="18" height="18" fill="#bdff32"/>
             </g>
-            <polygon points="96,58 108,58 108,54 116,60 108,66 108,62 96,62" fill="#989aaa"/>
-            <rect x="124" y="38" width="44" height="44" fill="#060709" stroke="#32353e" stroke-width="2"/>
-            <text x="146" y="63" class="figtext" fill="#f3f4ed" text-anchor="middle">GUARD</text>
-            <polygon points="176,58 188,58 188,54 196,60 188,66 188,62 176,62" fill="#989aaa"/>
-            <g fill="#060709" stroke="#7376ff" stroke-width="2">
-              <rect x="204" y="34" width="28" height="12"/><rect x="204" y="54" width="28" height="12"/><rect x="204" y="74" width="28" height="12"/>
-            </g>
-            <g fill="#7376ff"><rect x="216" y="46" width="4" height="8"/><rect x="216" y="66" width="4" height="8"/></g>
-            <text x="46" y="30" class="figtext" fill="#bdff32" text-anchor="middle">21 DN GROUPS</text>
-            <text x="146" y="30" class="figtext" fill="#989aaa" text-anchor="middle">VETO ONLY</text>
-            <text x="238" y="30" class="figtext" fill="#7376ff" text-anchor="end">SOLANA</text>
-            <text x="46" y="98" class="figtext" fill="#989aaa" text-anchor="middle">TILES</text>
-            <text x="146" y="98" class="figtext" fill="#989aaa" text-anchor="middle">LIMITS</text>
-            <text x="238" y="98" class="figtext" fill="#989aaa" text-anchor="end">1 DEPLOY</text>
+            <text x="101" y="122" class="diagram-small" fill="#bdff32" text-anchor="middle">21 DN GROUPS -&gt; TILES</text>
+            <path d="M101 126v18h100v-30" fill="none" stroke="#526078" stroke-width="2"/>
+            <g fill="#101820" stroke="#526078" stroke-width="2"><path d="M206 50h100v52H206z"/></g>
+            <text x="256" y="72" class="diagram-small" fill="#f3f4ed" text-anchor="middle">GUARD</text>
+            <text x="256" y="88" class="diagram-small" fill="#989aaa" text-anchor="middle">VETO ONLY</text>
+            <path d="M306 76h18" fill="none" stroke="#526078" stroke-width="2"/>
+            <path d="M324 50h92v52h-92z" fill="#1e2a13" stroke="#bdff32" stroke-width="2"/>
+            <text x="370" y="72" class="diagram-small" fill="#bdff32" text-anchor="middle">1 DEPLOY</text>
+            <text x="370" y="88" class="diagram-small" fill="#9da58f" text-anchor="middle">PER ROUND</text>
+            <path d="M26 144h388v45H26z" fill="#151923" stroke="#526078" stroke-width="2"/>
+            <text x="220" y="164" text-anchor="middle" class="diagram-small" fill="#bdc5d4">TIMING / BUDGET / COUNT / ACCOUNT</text>
+            <text x="220" y="179" text-anchor="middle" class="diagram-small" fill="#989aaa">FIXED STAKE · NEVER A NEURAL QUANTITY</text>
           </svg>
+          <figcaption id="how-execution">READING EXECUTION MODE…</figcaption>
         </figure>
-        <h3>A fixed readout, not a plan.</h3>
-        <p>Every descending neuron is sorted by ID and cut into <strong>21 pre-registered groups</strong>, one per tile<span id="readout-cells"></span>. A group firing above its own running average, beyond the median, proposes its tile; the largest excess is always in. A guard checks timing, budget, count and account state. It can veto; it never substitutes tiles. What passes becomes at most <strong>one <code>DeployPublic</code> per round</strong>: in live mode it is sent to Solana from a dedicated wallet; in paper mode nothing is sent and the deploy is settled on paper against the real winning tile and pot. The stake is a fixed setting, never a neural quantity.</p>
+        <h3>A SPIKE CAN BECOME A DEPLOY.</h3>
+        <p>A fixed readout turns descending-neuron spikes into tiles<span id="readout-cells"></span>. A guard checks timing, budget and count. It can veto, never choose. At most <strong>one deploy per round</strong>.</p>
       </article>
     </li>
     <li>
       <article class="panel step" aria-labelledby="step4-title">
-        <header class="step-head"><span class="step-no" aria-hidden="true">04</span><h2 id="step4-title">FEEDBACK</h2></header>
+        <div class="step-label"><span id="step4-title">04 / FEEDBACK</span><span>CANDIDATE MEMORY</span></div>
         <figure class="fig">
-          <svg viewBox="0 0 260 120" role="img" aria-label="Pixel diagram: a 200 millisecond square pulse, then a row of 15 reward cells and a row of 2 aversive cells" shape-rendering="crispEdges">
-            <polyline points="8,64 70,64 70,28 118,28 118,64 252,64" fill="none" stroke="#bdff32" stroke-width="2"/>
-            <g fill="#32353e"><rect x="70" y="72" width="2" height="6"/><rect x="118" y="72" width="2" height="6"/><rect x="70" y="76" width="50" height="2"/></g>
-            <text x="94" y="20" class="figtext" fill="#f3f4ed" text-anchor="middle">200 MS PULSE</text>
-            <text x="190" y="56" class="figtext" fill="#989aaa" text-anchor="middle">±0.01 USDC</text>
-            <g fill="#bdff32">
-              <rect x="8" y="88" width="6" height="6"/><rect x="17" y="88" width="6" height="6"/><rect x="26" y="88" width="6" height="6"/><rect x="35" y="88" width="6" height="6"/><rect x="44" y="88" width="6" height="6"/><rect x="53" y="88" width="6" height="6"/><rect x="62" y="88" width="6" height="6"/><rect x="71" y="88" width="6" height="6"/><rect x="80" y="88" width="6" height="6"/><rect x="89" y="88" width="6" height="6"/><rect x="98" y="88" width="6" height="6"/><rect x="107" y="88" width="6" height="6"/><rect x="116" y="88" width="6" height="6"/><rect x="125" y="88" width="6" height="6"/><rect x="134" y="88" width="6" height="6"/>
-            </g>
-            <g fill="#ff4b78"><rect x="237" y="88" width="6" height="6"/><rect x="246" y="88" width="6" height="6"/></g>
-            <text x="8" y="112" class="figtext" fill="#bdff32">15 PAM11 REWARD</text>
-            <text x="252" y="112" class="figtext" fill="#ff4b78" text-anchor="end">2 PPL101 AVERSIVE</text>
+          <svg viewBox="0 0 440 210" role="img" aria-label="A round gain pulses 15 PAM11 cells, a round loss pulses 2 PPL101 cells; schematic, not measured activity" shape-rendering="crispEdges">
+            <g class="diagram-small"><text x="24" y="24" fill="#bdff32">ROUND GAIN</text><text x="261" y="24" fill="#ff4b78">ROUND LOSS</text></g>
+            <path d="M28 79h30V47h48V79h43" fill="none" stroke-width="4" stroke="#bdff32"/>
+            <path d="M265 79h30V47h48V79h43" fill="none" stroke-width="4" stroke="#ff4b78"/>
+            <g fill="#bdff32"><rect x="31" y="94" width="8" height="8"/><rect x="46" y="94" width="8" height="8"/><rect x="61" y="94" width="8" height="8"/><rect x="76" y="94" width="8" height="8"/><rect x="91" y="94" width="8" height="8"/><rect x="31" y="106" width="8" height="8"/><rect x="46" y="106" width="8" height="8"/><rect x="61" y="106" width="8" height="8"/><rect x="76" y="106" width="8" height="8"/><rect x="91" y="106" width="8" height="8"/><rect x="31" y="118" width="8" height="8"/><rect x="46" y="118" width="8" height="8"/><rect x="61" y="118" width="8" height="8"/><rect x="76" y="118" width="8" height="8"/><rect x="91" y="118" width="8" height="8"/></g>
+            <g fill="#ff4b78"><rect x="268" y="94" width="8" height="8"/><rect x="283" y="94" width="8" height="8"/></g>
+            <g class="diagram-small"><text x="24" y="150" fill="#bdff32">15 PAM11</text><text x="261" y="150" fill="#ff4b78">2 PPL101</text><text x="24" y="172" fill="#989aaa">GAIN &gt;= +0.01 USDC</text><text x="261" y="172" fill="#989aaa">LOSS &lt;= -0.01 USDC</text><text x="24" y="194" fill="#989aaa">200 MS PULSE · ONE PER SETTLED ROUND</text></g>
           </svg>
+          <figcaption>SCHEMATIC · NOT MEASURED ACTIVITY</figcaption>
         </figure>
-        <h3>One pulse per settled round.</h3>
-        <p>When a round the fly played settles, its result is refund plus sats value (plus, in live play, any RUSH token value the API reports) minus the amount deployed. At least <strong>+0.01 USDC</strong> schedules a <strong>200 ms pulse into 15 PAM11</strong> dopamine cells; at most <strong>−0.01 USDC</strong>, the same pulse into <strong>2 PPL101</strong> cells. A candidate memory rule then adjusts existing KC→MBON connections. Fees count as loss, so most rounds are aversive. This is engineered reinforcement, not modeled pain or pleasure.</p>
+        <h3>THE ROUND FEEDS BACK.</h3>
+        <p>A settled round of at least <strong>±0.01 USDC</strong> fires a 200 ms pulse into simulated dopamine cells: 15 PAM11 for a gain, two PPL101 for a loss. A candidate memory rule changes selected connections.</p>
       </article>
     </li>
   </ol>
 
-  <aside class="panel note" aria-labelledby="note-title">
-    <h2 id="note-title">CHANGING CONNECTIONS ARE NOT PROVEN SKILL.</h2>
-    <ul>
-      <li>The winning tile is drawn on chain. No reading of the board predicts it, and synaptic change is not evidence of learning to play well.</li>
-      <li>Every deploy pays a 6% fee and each missed tile loses 11% of what was placed on it. Expected value is negative every round; the balance is expected to decline.</li>
-      <li>Paper mode settles hypothetical deploys from the real winning tile and pot. Results tagged PAPER or SIM are simulated. Only LIVE WALLET in the footer means real deploys.</li>
-      <li>The 3D fly is decorative. It is not a neural or muscle reconstruction.</li>
-      <li>One worker owns the ledger. This page reads published snapshots and can change nothing.</li>
-    </ul>
-    <p class="note-links"><a href="/api/audit">AUDIT JSON</a> · <a href="/api/state">STATE JSON</a> · <a href="https://github.com/jonleach323/stonkfly">SOURCE</a></p>
-  </aside>
+  <p class="how-foot"><a class="back-link" href="#watch">BACK TO THE FLY &gt;</a></p>
 </section>
 
 </main>

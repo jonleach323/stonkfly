@@ -11,6 +11,7 @@ import traceback
 from pathlib import Path
 
 from .config import Settings
+from .provenance import reconcile as reconcile_provenance, source_hashes
 
 
 def main():
@@ -168,19 +169,14 @@ def main():
             "learning_validated": False,
             "pain_receptors_modeled": False,
             "timing": "Each round advances configured neural_ms regardless of wall time; no claim of real-time fly physiology.",
-            "source_sha256": {
-                str(path.relative_to(Path(__file__).parent)): hashlib.sha256(path.read_bytes()).hexdigest()
-                for path in sorted(Path(__file__).parent.rglob("*"))
-                if path.suffix in (".py", ".cpp")
-            },
+            "source_sha256": source_hashes(Path(__file__).parent),
         }
         if not a.stub_brain:
             provenance["circuit"] = controller.brain.circuit["report"]
             provenance["vision"] = controller.brain.visual_report
-        signature = hashlib.sha256(json.dumps(provenance, sort_keys=True).encode()).hexdigest()
-        if ledger.get("provenance_sha256") not in (None, signature):
-            raise RuntimeError("Run source/protocol changed; use a separate run directory or review migration")
-        ledger.put("provenance_sha256", signature)
+        changed = reconcile_provenance(ledger, out, provenance)
+        if changed:
+            print(json.dumps({"source_changed": changed, "note": "protocol unchanged; the run continues"}), flush=True)
         (out / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
         from .guard import Guard
         from .loop import GameLoop
