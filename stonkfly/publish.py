@@ -299,6 +299,10 @@ def snapshot(out, now=None):
             "changed_edges": (n.get("memory") or {}).get("changed_edges"),
             "stub": bool(n.get("stub")),
             "compute_seconds": n.get("compute_seconds"),
+            # The pick sequence: one entry per step, the stop reason and the neural time used.
+            "steps": n.get("steps"),
+            "stop_reason": n.get("stop_reason"),
+            "neural_ms_used": n.get("neural_ms_used"),
         }
     frame = out / "latest-input.png"
     frame_sha = hashlib.sha256(frame.read_bytes()).hexdigest() if frame.exists() else None

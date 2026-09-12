@@ -710,7 +710,7 @@ function renderReplay(s) {
     load.then(([buffer, meta]) => {
       app.atlasSha = atlasSha;
       safe(() => app.brain.setAtlas(buffer, meta));
-      if (meta && meta.n) setText("replay-note", `${fmtInt(meta.n)} of ${fmtInt(meta.of)} simulated cells at their soma positions. Brightness is how much each fired in the last observation; the spikes play back at real time every few seconds. A model, not a recording.`);
+      if (meta && meta.n) setText("replay-note", `${fmtInt(meta.n)} of ${fmtInt(meta.of)} simulated cells at their soma positions. Brightness is how much each fired in the last observation; each new observation's spikes play once, at real time. A model, not a recording.`);
       if (app.activityPending) { const b = app.activityPending; app.activityPending = null; safe(() => app.brain.setActivity(b)); }
     }).catch((e) => console.warn("atlas unavailable:", e && e.message ? e.message : e)).finally(() => { app.atlasLoading = false; });
   }

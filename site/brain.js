@@ -13,7 +13,6 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 // grey, spiking cells go to a warm white, like an activity map.
 const REST = [0.42, 0.46, 0.52];
 const LIT = [1.0, 0.96, 0.82];
-const HOLD_SECONDS = 2.0;    // rest on the activity map before the spikes play again
 
 function readAtlas(buffer) {
   const view = new DataView(buffer);
@@ -66,7 +65,8 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
   let visible = true;
   let rafId = 0;
   let lastT = 0;
-  let replayT = 0;      // seconds into the replay cycle
+  let replayT = 0;      // seconds into the one-off play of the latest observation
+  let playing = false;
   let lastBin = -1;
   let yaw = 0;
   let pitch = 0;
@@ -123,9 +123,11 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
   }
 
   let totalMap = null; // per-cell brightness from its spikes over the whole observation
+  let totalSpikes = null;
   function totals() {
     groupTotals = null;
     totalMap = null;
+    totalSpikes = null;
     if (!atlas || !activity || activity.n !== atlas.n) return;
     const { bins, counts, n } = activity;
     groupTotals = new Float32Array(21 * bins);
@@ -142,7 +144,8 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
       }
       if (sum > binMax) binMax = sum;
     }
-    for (let i = 0; i < n; i += 1) totalMap[i] = Math.min(1, Math.log1p(totalMap[i]) / Math.log1p(12));
+    totalSpikes = 0;
+    for (let i = 0; i < n; i += 1) { totalSpikes += totalMap[i]; totalMap[i] = Math.min(1, Math.log1p(totalMap[i]) / Math.log1p(12)); }
   }
 
   // Colour every point for one slice of neural time (bin < 0: the map alone).
@@ -165,10 +168,15 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
     }
     points.geometry.attributes.color.needsUpdate = true;
     if (hud) {
-      let spikes = 0;
-      if (have) for (let i = 0; i < n; i += 1) spikes += activity.counts[bin * n + i];
-      const perSecond = have ? spikes * (1000 / activity.binMs) : 0;
-      hud.textContent = have ? (perSecond >= 1e6 ? `${(perSecond / 1e6).toFixed(2)}M` : perSecond >= 1e3 ? `${(perSecond / 1e3).toFixed(1)}K` : String(Math.round(perSecond))) : '—';
+      let perSecond = null;
+      if (have) {
+        let spikes = 0;
+        for (let i = 0; i < n; i += 1) spikes += activity.counts[bin * n + i];
+        perSecond = spikes * (1000 / activity.binMs);
+      } else if (activity && activity.n === n && totalSpikes !== null) {
+        perSecond = totalSpikes * (1000 / (activity.bins * activity.binMs)); // the observation's mean rate
+      }
+      hud.textContent = perSecond === null ? '—' : (perSecond >= 1e6 ? `${(perSecond / 1e6).toFixed(2)}M` : perSecond >= 1e3 ? `${(perSecond / 1e3).toFixed(1)}K` : String(Math.round(perSecond)));
     }
   }
 
@@ -221,14 +229,14 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
     if (!reduced) yaw = 0.08 * Math.sin(t * 0.25);
     pivot.rotation.y = yaw + dragYaw;
     pivot.rotation.x = pitch + dragPitch;
-    if (activity && atlas && activity.n === atlas.n) {
+    if (activity && atlas && activity.n === atlas.n && playing) {
       replayT += dt;
-      // Slices play at real time: each lasts its bin_ms of neural time.
+      // The slices play once, at real time (each lasts its bin_ms of neural
+      // time), when an observation arrives; then the map stays until the next.
       const play = activity.bins * activity.binMs / 1000;
-      const cycle = play + HOLD_SECONDS;
-      if (replayT >= cycle) { replayT -= cycle; }
       const bin = replayT < play ? Math.min(activity.bins - 1, Math.floor(replayT / (activity.binMs / 1000))) : -1;
       if (bin !== lastBin) { lastBin = bin; paintBin(bin); }
+      if (bin < 0) playing = false;
     }
     renderer.render(scene, camera);
     rafId = requestAnimationFrame(frame);
@@ -267,6 +275,7 @@ export function startBrainView(canvas, { raster = null, hud = null } = {}) {
       activity = readActivity(buffer);
       replayT = 0;
       lastBin = -1;
+      playing = true;
       totals();
       drawRaster();
       if (points) { energy.fill(0); paintBin(0); }
