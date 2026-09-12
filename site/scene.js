@@ -736,14 +736,15 @@ export function startScene(canvas) {
       b && b.round_id, b && b.fetched_at, b && b.state, b && b.pending_activation,
       Number.isFinite(ends) ? Math.max(0, Math.ceil(ends - now)) : '',
       s.ready ? '' : Math.floor(now * 2) & 1,
-      pressView() ? `${anim.press.selected.join(',')}/${anim.press.pressing}/${anim.press.deployed ? 1 : 0}` : 'all',
+      pressView() ? `${anim.press.selected.join(',')}/${anim.press.pressing}/${anim.press.phase}/${anim.press.deployed ? 1 : 0}` : 'all',
     ].join('|');
   }
   // What the screen shows of the selection: the presses so far while the
   // sequence plays, the whole pick on a still frame or before the first sequence.
   function pressView() {
     if (!anim.press.started || !anim.running) return null;
-    return { selected: anim.press.selected, pressing: anim.press.pressing, deployed: anim.press.deployed };
+    const p = anim.press;
+    return { selected: p.selected, pressing: p.pressing, recent: p.phase === 'gap' && p.index < p.queue.length ? p.queue[p.index] : null, deployed: p.deployed };
   }
   // Repaint and re-upload the 960x540 texture only when its content changed.
   function paintMonitor() {
@@ -926,14 +927,14 @@ export function startScene(canvas) {
     press.deployed = false;
     press.started = true;
     press.phase = 'gap';
-    press.phaseEnd = t + 0.5;
+    press.phaseEnd = t + 0.8;
     lastKey = '';
   }
   function moveTo(target, t) {
     const press = anim.press;
     press.from.copy(anim.cursor);
     press.to.set(target.x, target.y);
-    press.dur = 0.22 + press.from.distanceTo(press.to) / 1500;
+    press.dur = 0.45 + press.from.distanceTo(press.to) / 700;
     press.t0 = t;
     press.phase = 'move';
   }
@@ -943,7 +944,7 @@ export function startScene(canvas) {
       // A slow drift, like a hand resting on the mouse; after a pause the fly
       // runs through its picks again, so the clicking is always on show.
       anim.cursor.set(press.idleBase.x + 14 * Math.sin(t * 0.6), press.idleBase.y + 9 * Math.sin(t * 0.9 + 1));
-      if (press.queue.length && t - press.idleSince > 4) startPresses(press.queue, t, press.tick);
+      if (press.queue.length && t - press.idleSince > 6) startPresses(press.queue, t, press.tick);
       return false;
     }
     if (press.phase === 'gap' && t >= press.phaseEnd) {
@@ -956,12 +957,12 @@ export function startScene(canvas) {
     if (press.phase === 'move') {
       const p = Math.min(1, (t - press.t0) / press.dur);
       anim.cursor.lerpVectors(press.from, press.to, ease(p));
-      if (p >= 1) { press.phase = 'hold'; press.phaseEnd = t + 0.14; }
+      if (p >= 1) { press.phase = 'hold'; press.phaseEnd = t + 0.3; }
       return false;
     }
     if (press.phase === 'hold' && t >= press.phaseEnd) {
       press.phase = 'click';
-      press.phaseEnd = t + 0.22;
+      press.phaseEnd = t + 0.35;
       if (press.index < press.queue.length) {
         press.pressing = press.queue[press.index];
         press.selected = press.selected.concat(press.pressing);
@@ -973,7 +974,7 @@ export function startScene(canvas) {
     if (press.phase === 'click' && t >= press.phaseEnd) {
       press.pressing = null;
       press.phase = 'gap';
-      press.phaseEnd = t + (press.index < press.queue.length ? 0.14 : 0.6);
+      press.phaseEnd = t + (press.index < press.queue.length ? 0.45 : 0.8);
       return true;
     }
     return false;

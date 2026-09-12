@@ -385,6 +385,7 @@ function drawBoard(ctx, state, board, view) {
   const maxStake = Math.max(0, ...stakes);
   const chosen = new Set(view && Array.isArray(view.selected) ? view.selected : (state && state.neural && Array.isArray(state.neural.tiles) ? state.neural.tiles : []));
   const pressing = view && view.pressing != null ? view.pressing : null;
+  const justPressed = view && view.recent != null ? view.recent : null;
 
   // Last winning tile: the board's newest previous winner, else the state board's.
   const winners = (board && Array.isArray(board.previous_winners) && board.previous_winners.length ? board.previous_winners : null)
@@ -407,9 +408,17 @@ function drawBoard(ctx, state, board, view) {
     ctx.fillStyle = lerpColor(COLORS.tileLow, COLORS.tileHigh, share);
     ctx.fill();
     if (isChosen || tile === pressing) {
+      // Lit tiles fill orange; the one under the click flares almost solid, then eases for a beat.
       hexPath(ctx, x, y, HEX_R - 2);
-      ctx.fillStyle = tile === pressing ? 'rgba(242,94,48,0.45)' : 'rgba(242,94,48,0.16)';
+      ctx.fillStyle = tile === pressing ? 'rgba(242,94,48,0.9)' : (tile === justPressed ? 'rgba(242,94,48,0.55)' : 'rgba(242,94,48,0.3)');
       ctx.fill();
+    }
+    if (tile === pressing) {
+      // Click ring.
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      hexPath(ctx, x, y, HEX_R + 3);
+      ctx.stroke();
     }
     if (isWinner) {
       hexPath(ctx, x, y, HEX_R - 2);
@@ -435,7 +444,7 @@ function drawBoard(ctx, state, board, view) {
       ctx.fill();
     }
 
-    text(ctx, `#${tile}`, x, y - 14, 16, isChosen ? COLORS.accent : COLORS.ink, 'center', 'middle', 700);
+    text(ctx, `#${tile}`, x, y - 14, 16, tile === pressing ? '#ffffff' : (isChosen ? COLORS.accent : COLORS.ink), 'center', 'middle', 700);
     if (board) {
       const stake = tileStakeLabel(stakes[i]);
       ctx.font = font(15, 600);
