@@ -81,7 +81,8 @@ def test_frame_geometry_and_content():
 @pytest.mark.parametrize(
     "changes",
     [
-        dict(capital="101"),
+        dict(capital="1001"),
+        dict(capital="0"),
         dict(stake="0.5"),
         dict(stake="11"),
         dict(stake="1.0000001"),
@@ -109,3 +110,9 @@ def test_count_is_a_neural_quantity_from_one_tile_to_all_21():
     for _ in range(4):
         r2.decode(base * 3, 0.5)
     assert r2.decode(base, 0.5)["tiles"] == [1]  # every group below: only the argmax stays
+
+
+def test_capital_may_be_raised_to_the_ceiling():
+    from stonkfly.config import Settings
+
+    assert Settings(capital="1000", stake="10", loss_stop="200").capital == "1000"

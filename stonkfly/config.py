@@ -25,7 +25,7 @@ def down(value, step):
 @dataclass(frozen=True)
 class Settings:
     network: str = "mainnet"
-    capital: str = "100"  # Maximum USDC the dedicated wallet may hold at start.
+    capital: str = "100"  # Maximum USDC the dedicated wallet may hold at start; the program ceiling is 1000.
     stake: str = "1"  # USDC deployed per round, split evenly across chosen tiles.
     loss_stop: str = "20"
     daily_deploys: int = 300
@@ -43,8 +43,8 @@ class Settings:
     def __post_init__(self):
         if self.network not in ("mainnet", "devnet"):
             raise ValueError("network must be mainnet or devnet")
-        if not 0 < D(self.capital) <= 100:
-            raise ValueError("Maximum capital 100 USDC")
+        if not 0 < D(self.capital) <= 1000:
+            raise ValueError("Maximum capital 1000 USDC")
         if not 1 <= D(self.stake) <= min(D(self.capital), D(10)):
             raise ValueError("Stake must be between the 1 USDC program minimum and 10 USDC")
         if D(self.stake) != down(self.stake, "0.000001"):

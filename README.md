@@ -22,7 +22,7 @@ python -m stonkfly run
 
 Default: **paper play against the real public board, $100 simulated balance, $1 per round**. No wallet needed. Outcomes are simulated from each finished round's real winning tile and pot. Local logs, sensory images and resumable brain state go in `runs/paper/`. Ctrl-C stops it; the same command resumes.
 
-For real deploys, create a **dedicated Solana wallet with at most 100 USDC and a little SOL**. Copy `.env.example` to `.env`, point it at the keypair file, then run these commands yourself:
+For real deploys, create a **dedicated Solana wallet holding no more than `STONKFLY_CAPITAL` USDC (default 100, ceiling 1000) and a little SOL**. Copy `.env.example` to `.env`, point it at the keypair file, then run these commands yourself:
 
 ```sh
 python -m stonkfly run --live --preflight-only

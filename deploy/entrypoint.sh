@@ -26,6 +26,7 @@ case "${1:-worker}" in
     prepare_if_needed
     mkdir -p "$OUT"
     set -- run --network "$NETWORK" --out "$OUT" \
+      --capital "${STONKFLY_CAPITAL:-100}" \
       --stake "${STONKFLY_STAKE:-1}" \
       --loss-stop "${STONKFLY_LOSS_STOP:-20}" \
       --daily-deploys "${STONKFLY_DAILY_DEPLOYS:-300}" \
