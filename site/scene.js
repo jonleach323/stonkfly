@@ -216,9 +216,9 @@ function skyTexture() {
   c.height = 64;
   const ctx = c.getContext('2d');
   const g = ctx.createLinearGradient(0, 0, 0, 64);
-  g.addColorStop(0, '#04050a');
-  g.addColorStop(0.7, '#0a0b18');
-  g.addColorStop(1, '#1b1130');
+  g.addColorStop(0, '#05060c');
+  g.addColorStop(0.6, '#0e1024');
+  g.addColorStop(1, '#2a1a44');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 4, 64);
   const tex = new THREE.CanvasTexture(c);
@@ -232,21 +232,19 @@ function buildSkyline(scene) {
 
   // Sky: two dark gradient walls, far behind and far left.
   const skyMaterial = new THREE.MeshBasicMaterial({ map: skyTexture(), fog: false });
-  const skyBack = new THREE.Mesh(new THREE.PlaneGeometry(260, 140), skyMaterial);
-  skyBack.position.set(0, 30, -90);
-  group.add(skyBack);
   const skyLeft = new THREE.Mesh(new THREE.PlaneGeometry(260, 140), skyMaterial);
   skyLeft.rotation.y = Math.PI / 2;
   skyLeft.position.set(-90, 30, 0);
   group.add(skyLeft);
 
-  const textures = [facadeTexture(rand, 0.05), facadeTexture(rand, 0.08), facadeTexture(rand, 0.035), facadeTexture(rand, 0.065)];
+  const textures = [facadeTexture(rand, 0.07), facadeTexture(rand, 0.11), facadeTexture(rand, 0.05), facadeTexture(rand, 0.09)];
   const ground = -28;
   // Two rings of towers around the platform's left and back edges; the outer
   // ring is taller and darker. Each entry: distance band from the platform.
   const rings = [
-    { near: 8, far: 12, tint: 0x171c2e, glow: 1.0, wMin: 2.2, wMax: 5.5, hMin: 40, hMax: 58, gap: 1.2 },
-    { near: 14, far: 22, tint: 0x0f1322, glow: 0.7, wMin: 3.5, wMax: 8, hMin: 52, hMax: 80, gap: 1.6 },
+    { near: 5, far: 8, tint: 0x28304c, glow: 1.0, wMin: 2.0, wMax: 4.5, hMin: 36, hMax: 52, gap: 1.0 },
+    { near: 10, far: 15, tint: 0x1e2440, glow: 0.85, wMin: 3.0, wMax: 6.5, hMin: 44, hMax: 66, gap: 1.4 },
+    { near: 17, far: 25, tint: 0x161a30, glow: 0.7, wMin: 4.0, wMax: 9, hMin: 56, hMax: 90, gap: 1.8 },
   ];
   const towers = [];
   function tower(ring, x, z, w, d) {
@@ -274,19 +272,12 @@ function buildSkyline(scene) {
     return mesh;
   }
   rings.forEach((ring) => {
-    // Left edge: a line of towers at x in [-far, -near], running from behind to in front of the desk.
-    for (let z = -ring.far - 4; z < 14;) {
+    // Lines of towers beyond the left wall (x = -3.2), running from behind the desk to well in front of it.
+    for (let z = -ring.far - 8; z < 22;) {
       const w = ring.wMin + rand() * (ring.wMax - ring.wMin);
       const d = ring.wMin + rand() * (ring.wMax - ring.wMin);
-      tower(ring, -ring.near - rand() * (ring.far - ring.near) - w / 2, z + d / 2, w, d);
+      tower(ring, -3.2 - ring.near - rand() * (ring.far - ring.near) - w / 2, z + d / 2, w, d);
       z += d + ring.gap + rand() * 2;
-    }
-    // Back edge: from far left to the right of the frame.
-    for (let x = -ring.far - 4; x < 16;) {
-      const w = ring.wMin + rand() * (ring.wMax - ring.wMin);
-      const d = ring.wMin + rand() * (ring.wMax - ring.wMin);
-      tower(ring, x + w / 2, -ring.near - rand() * (ring.far - ring.near) - d / 2, w, d);
-      x += w + ring.gap + rand() * 2;
     }
   });
 
@@ -298,9 +289,8 @@ function buildSkyline(scene) {
   const drops = [];
   const palette = WINDOW_COLORS.map((hex) => new THREE.Color(hex));
   for (let i = 0; i < RAIN; i += 1) {
-    const onLeft = rand() < 0.55;
-    const x = onLeft ? -6 - rand() * 14 : -18 + rand() * 30;
-    const z = onLeft ? -14 + rand() * 24 : -6 - rand() * 14;
+    const x = -8 - rand() * 18;
+    const z = -14 + rand() * 30;
     const drop = { x, z, y: -4 + rand() * 20, len: 0.25 + rand() * 0.7, speed: 1.2 + rand() * 2.4 };
     drops.push(drop);
     const c = palette[Math.floor(rand() * palette.length)];
@@ -333,7 +323,7 @@ function buildSkyline(scene) {
   updateRain(0);
 
   // A dim city glow so unlit facades are not pure black.
-  group.add(new THREE.HemisphereLight(0x3a3060, 0x1a1020, 1.1));
+  group.add(new THREE.HemisphereLight(0x4a4080, 0x201430, 1.6));
 
   scene.add(group);
   return { group, towers, updateRain };
@@ -343,21 +333,63 @@ function buildSkyline(scene) {
 // Set dressing.
 
 function buildRoom(scene) {
-  // The platform: a floor with a grid, its far edges lit like the desk's.
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), standard(0xffffff, { map: floorTexture(), roughness: 0.95 }));
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
-  scene.add(emissiveBox(14, 0.03, 0.03, PALETTE.magenta, 2.2, 0, 0.015, -7));
-  scene.add(emissiveBox(0.03, 0.03, 14, PALETTE.blue, 2.0, -7, 0.015, 0));
+
+  const wallMaterial = standard(PALETTE.wall, { roughness: 1 });
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(14, 5), wallMaterial);
+  back.position.set(0, 2.5, -1.9);
+  scene.add(back);
+
+  // Left wall (x = -3.2, z -3..5) that is mostly window (z -2.85..2.6, y 0.7..4.3) onto the city.
+  const W = { x: -3.2, near: -2.85, far: 2.6, bottom: 0.7, top: 4.3 };
+  const wallPiece = (w, h, z, y) => {
+    const piece = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMaterial);
+    piece.rotation.y = Math.PI / 2;
+    piece.position.set(W.x, y, z);
+    scene.add(piece);
+  };
+  wallPiece(8, W.bottom, 1, W.bottom / 2);
+  wallPiece(8, 5 - W.top, 1, (5 + W.top) / 2);
+  wallPiece(W.near + 3, W.top - W.bottom, (W.near - 3) / 2, (W.top + W.bottom) / 2);
+  wallPiece(5 - W.far, W.top - W.bottom, (W.far + 5) / 2, (W.top + W.bottom) / 2);
+  const frame = standard(0x14161d, { roughness: 0.6, metalness: 0.3 });
+  const winW = W.far - W.near;
+  const winH = W.top - W.bottom;
+  const cz = (W.near + W.far) / 2;
+  const cy = (W.top + W.bottom) / 2;
+  scene.add(box(0.12, 0.08, winW + 0.12, frame, W.x + 0.02, W.top + 0.02, cz));
+  scene.add(box(0.16, 0.08, winW + 0.12, frame, W.x + 0.02, W.bottom - 0.02, cz)); // sill
+  scene.add(box(0.12, winH, 0.08, frame, W.x + 0.02, cy, W.near - 0.02));
+  scene.add(box(0.12, winH, 0.08, frame, W.x + 0.02, cy, W.far + 0.02));
+  scene.add(box(0.08, winH, 0.05, frame, W.x + 0.02, cy, -1.0)); // mullions
+  scene.add(box(0.08, winH, 0.05, frame, W.x + 0.02, cy, 0.8));
+  const glass = new THREE.Mesh(
+    new THREE.PlaneGeometry(winW, winH),
+    new THREE.MeshStandardMaterial({ color: 0x9db4ff, transparent: true, opacity: 0.06, roughness: 0.1, metalness: 0.5, depthWrite: false }),
+  );
+  glass.rotation.y = Math.PI / 2;
+  glass.position.set(W.x + 0.01, cy, cz);
+  scene.add(glass);
 
   const skyline = buildSkyline(scene);
 
-  // A candlestick poster on a free-standing board behind the desk, right side.
-  const board = box(0.6, 0.8, 0.05, standard(PALETTE.shape), 1.9, 1.3, -1.6);
-  scene.add(board);
+  // Blocky background shapes.
+  scene.add(box(0.5, 0.5, 0.5, standard(PALETTE.shapeAlt), 1.25, 0.25, -1.5));
+  scene.add(box(0.44, 0.44, 0.44, standard(PALETTE.shape), 1.28, 0.72, -1.52));
+  scene.add(box(0.46, 1.1, 0.5, standard(PALETTE.shapeAlt), 1.95, 0.55, -1.55));
+  for (let i = 0; i < 4; i += 1) {
+    scene.add(emissiveBox(0.04, 0.02, 0.01, i % 2 ? PALETTE.blue : PALETTE.acid, 2.5, 1.8, 0.9 - i * 0.14, -1.295));
+  }
+
   const poster = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.69), standard(0xffffff, { map: posterTexture(), roughness: 1 }));
-  poster.position.set(1.9, 1.3, -1.57);
+  poster.position.set(-2.35, 1.45, -1.89);
   scene.add(poster);
+
+  // Neon tubes: the magenta one is the rim light, the blue one a cool accent.
+  scene.add(emissiveBox(3.2, 0.035, 0.035, PALETTE.magenta, 2.2, 0.5, 2.3, -1.87));
+  scene.add(emissiveBox(0.035, 1.7, 0.035, PALETTE.blue, 2.0, -2.75, 1.15, -1.87));
 
   // Contact shadow under the stool.
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }));
@@ -762,8 +794,8 @@ export function startScene(canvas) {
   }
 
   // --- orbit ----------------------------------------------------------------
-  const target = new THREE.Vector3(-0.3, 0.9, 0.12);
-  const orbit = { home: 0.68, drag: 0, sway: 0, velocity: 0, radius: 3.1, elevation: 0.17 };
+  const target = new THREE.Vector3(-0.3, 0.82, 0.12);
+  const orbit = { home: 0.68, drag: 0, sway: 0, velocity: 0, radius: 3.05, elevation: 0.25 };
   function clampDrag() {
     if (orbit.drag < ORBIT_MIN) { orbit.drag = ORBIT_MIN; orbit.velocity = 0; }
     if (orbit.drag > ORBIT_MAX) { orbit.drag = ORBIT_MAX; orbit.velocity = 0; }
