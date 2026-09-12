@@ -119,25 +119,28 @@ def main():
     from .ledger import Ledger
     from .satrush.api import ENDPOINTS, FixtureApi, SatRushApi
 
-    def archive_paper_run(reason):
-        # A paper run whose settings or protocol changed cannot continue its
-        # ledger. Archive it beside the run and start fresh, so an update never
-        # strands the worker. Live runs stop instead: money is involved.
+    def archive_run(reason):
+        # A run whose settings or protocol changed cannot continue its ledger.
+        # Archive it beside the run and start fresh, so an update never strands
+        # the worker. A live run that has played stops instead: money is
+        # involved. One that never played (a failed start) holds no money.
         nonlocal lock
+        if a.live and not Ledger.never_played(out / "ledger.sqlite"):
+            raise RuntimeError(f"{reason}; the live run has played: use a separate run directory")
         archive = out.parent / f"{out.name}-archive-{time.strftime('%Y%m%d-%H%M%S')}"
         out.rename(archive)
         out.mkdir()
         lock = (out / "worker.lock").open("a")
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        print(json.dumps({"protocol_changed": True, "reason": reason, "archived": str(archive), "note": "paper run restarted from a fresh ledger"}), flush=True)
+        print(json.dumps({"protocol_changed": True, "reason": reason, "archived": str(archive), "note": "run restarted from a fresh ledger"}), flush=True)
 
     try:
         ledger = Ledger(out / "ledger.sqlite", settings, "live" if a.live else "paper")
     except RuntimeError as e:
-        if a.live or "mismatch" not in str(e):
+        if "mismatch" not in str(e):
             raise
-        archive_paper_run(str(e))
-        ledger = Ledger(out / "ledger.sqlite", settings, "paper")
+        archive_run(str(e))
+        ledger = Ledger(out / "ledger.sqlite", settings, "live" if a.live else "paper")
     playing = False  # Only a failure while playing halts the ledger; a bad .env is not a state to reconcile.
     try:
         api = (
@@ -190,12 +193,10 @@ def main():
         try:
             changed = reconcile_provenance(ledger, out, provenance)
         except RuntimeError:
-            if a.live:
-                raise
             ledger.close()
-            archive_paper_run("Run source/protocol changed")
-            ledger = Ledger(out / "ledger.sqlite", settings, "paper")
-            player = paper_player(settings, ledger, api)
+            archive_run("Run source/protocol changed")
+            ledger = Ledger(out / "ledger.sqlite", settings, "live" if a.live else "paper")
+            player = live_player(settings, ledger, api, a.network) if a.live else paper_player(settings, ledger, api)
             changed = reconcile_provenance(ledger, out, provenance)
         if changed:
             print(json.dumps({"source_changed": changed, "note": "protocol unchanged; the run continues"}), flush=True)

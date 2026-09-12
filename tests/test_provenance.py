@@ -95,3 +95,27 @@ def test_paper_run_archives_itself_on_a_protocol_change(tmp_path):
     assert len(archives) == 1 and (archives[0] / "ledger.sqlite").exists()
     db = sqlite3.connect(out / "ledger.sqlite")
     assert json.loads(db.execute("select value from meta where key='tick'").fetchone()[0]) == 1
+
+
+def test_never_played_ledger_is_safe_to_archive(tmp_path):
+    """A ledger that recorded no tick and no deployment holds no money: the worker may archive it
+    when its settings no longer match. One that played is kept for review."""
+    from stonkfly.config import Settings
+    from stonkfly.ledger import Ledger
+
+    path = tmp_path / "ledger.sqlite"
+    assert Ledger.never_played(path)  # nothing there yet
+    ledger = Ledger(path, Settings(), "live")
+    ledger.close()
+    assert Ledger.never_played(path)
+    with pytest.raises(RuntimeError, match="mismatch"):
+        Ledger(path, Settings(stake="2"), "live")
+    ledger = Ledger(path, Settings(), "live")
+    ledger.put("tick", 1)
+    ledger.close()
+    assert not Ledger.never_played(path)
+    ledger = Ledger(path, Settings(), "live")
+    ledger.put("tick", 0)
+    ledger.db.execute("INSERT INTO deployments VALUES (1, 'SENT', 0, '{}', NULL, NULL)")
+    ledger.close()
+    assert not Ledger.never_played(path)
