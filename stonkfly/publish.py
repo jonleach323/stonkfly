@@ -201,6 +201,9 @@ def _round_row(row):
         "sats": outcome.get("sats"),
         "sats_usd": _money(outcome["sats_usd"]) if outcome.get("sats_usd") is not None else None,
         "token_usd": _money(outcome["token_usd"]) if outcome.get("token_usd") is not None else None,
+        "strike": bool(outcome.get("strike")) if outcome else None,
+        "strike_usd": _money(outcome["strike_usd"]) if outcome.get("strike_usd") is not None else None,
+        "hashrate": outcome.get("hashrate"),
         "fee": _money(fee) if fee is not None else None,
         "pnl": _money(outcome["pnl_usd"]) if outcome.get("pnl_usd") is not None else None,
         "simulated": outcome.get("simulated"),
@@ -247,6 +250,10 @@ def snapshot(out, now=None):
     refunds_total = sum((D(d["outcome"].get("refund_usd") or 0) for d in settled), D(0))
     deployed_total = sum((D(d["plan"]["stake_usd"]) for d in settled), D(0))
     best = max((D(d["outcome"]["pnl_usd"]) for d in settled if d["outcome"].get("pnl_usd") is not None), default=None)
+    strikes_played = sum(1 for d in settled if d["outcome"].get("strike"))
+    strikes_hit = sum(1 for d in won if d["outcome"].get("strike"))
+    strike_usd_total = sum((D(d["outcome"].get("strike_usd") or 0) for d in settled), D(0))
+    hashrate_total = sum(int(d["outcome"].get("hashrate") or 0) for d in settled)
     day_start = now - now % 86400
     deploys_today = sum(1 for d in deployments if d["created"] >= day_start and d["status"] != "FAILED")
     history = [{"time": e["wall_time"], "equity": e["equity_usdc"]} for e in events if "equity_usdc" in e]
@@ -336,6 +343,11 @@ def snapshot(out, now=None):
             "hit_rate_percent": _money(D(len(won)) / D(len(settled)) * 100) if settled else None,
             "best_round_pnl": _money(best) if best is not None else None,
             "open_rounds": [d["round_id"] for d in open_rows],
+            "strikes_played": strikes_played,
+            "strikes_hit": strikes_hit,
+            "strike_won_usd": _money(strike_usd_total),
+            "hashrate": hashrate_total,
+            "vaults": meta.get("vault_positions"),
         },
         "rounds": [_round_row(d) for d in deployments[:30]],
         "round_count": len(deployments),
@@ -362,6 +374,8 @@ def snapshot(out, now=None):
         "learning_validated": False,
         "publication": {
             "frame_sha256": frame_sha,
+            "activity_sha256": _file_sha(out / "latest-activity.bin"),
+            "atlas_sha256": _file_sha(out / "atlas.bin"),
             "provenance_sha256": meta.get("provenance_sha256"),
             "publish_error": meta.get("publish_error"),
         },
@@ -417,8 +431,15 @@ def audit(out):
     }
 
 
+def _file_sha(path):
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
 def write_files(out):
-    """Write state.json, audit.json and sensory.png under <out>/site for uploads or static hosting."""
+    """Write state.json, audit.json, sensory.png and the neural replay files under <out>/site for uploads or static hosting."""
     out = Path(out)
     target = out / "site"
     target.mkdir(parents=True, exist_ok=True)
@@ -431,12 +452,25 @@ def write_files(out):
     if frame_bytes is not None:
         # Hash the bytes that ship, so the SHA the page shows is the SHA of the frame it fetches.
         state["publication"]["frame_sha256"] = hashlib.sha256(frame_bytes).hexdigest()
+    extras = {}
+    for name, source, content_type in (
+        ("activity.bin", "latest-activity.bin", "application/octet-stream"),
+        ("atlas.bin", "atlas.bin", "application/octet-stream"),
+        ("atlas.json", "atlas.json", "application/json"),
+    ):
+        path = out / source
+        if path.exists():
+            data = path.read_bytes()
+            extras[name] = (data, content_type)
+            if name != "atlas.json":
+                state["publication"][name.replace(".bin", "_sha256")] = hashlib.sha256(data).hexdigest()
     files = {
         "state.json": (json.dumps(state, allow_nan=False).encode(), "application/json"),
         "audit.json": (audit_bytes, "application/json"),
     }
     if frame_bytes is not None:
         files["sensory.png"] = (frame_bytes, "image/png")
+    files.update(extras)
     for name, (data, _) in files.items():
         tmp = target / (name + ".partial")
         tmp.write_bytes(data)
@@ -534,16 +568,17 @@ class BlobPublisher:
         files = write_files(out)
         try:
             # Dependencies first: state.json names the frame and the audit hash, so both must exist before it lands.
-            for name in ("sensory.png", "audit.json", "state.json"):
+            for name in ("sensory.png", "activity.bin", "atlas.bin", "atlas.json", "audit.json", "state.json"):
                 if name not in files:
                     continue
                 data, content_type = files[name]
                 sha = hashlib.sha256(data).hexdigest()
                 if self.uploaded.get(name) == sha:
                     continue
-                if name == "sensory.png":
-                    self.put(f"frames/{sha}.png", data, content_type, max_age=FRAME_MAX_AGE)
-                    self.urls[name] = self.urls.pop(f"frames/{sha}.png")
+                addressed = {"sensory.png": f"frames/{sha}.png", "activity.bin": f"activity/{sha}.bin", "atlas.bin": f"atlas/{sha}.bin"}
+                if name in addressed:
+                    self.put(addressed[name], data, content_type, max_age=FRAME_MAX_AGE)
+                    self.urls[name] = self.urls.pop(addressed[name])
                 else:
                     self.put(name, data, content_type)
                 self.uploaded[name] = sha

@@ -83,14 +83,21 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._json(self.board.get())
                 except (urllib.error.URLError, RuntimeError, ValueError) as e:
                     return self._json({"live": False, "error": type(e).__name__}, 502)
-            if path == "/api/sensory.png":
-                frame = Path(self.run_dir) / "latest-input.png"
-                if not frame.exists():
+            files = {
+                "/api/sensory.png": ("latest-input.png", "image/png"),
+                "/api/activity.bin": ("latest-activity.bin", "application/octet-stream"),
+                "/api/atlas.bin": ("atlas.bin", "application/octet-stream"),
+                "/api/atlas.json": ("atlas.json", "application/json; charset=utf-8"),
+            }
+            if path in files:
+                name, content_type = files[path]
+                target = Path(self.run_dir) / name
+                if not target.exists():
                     self.send_error(404)
                     return
-                data = frame.read_bytes()
+                data = target.read_bytes()
                 self.send_response(200)
-                self.send_header("content-type", "image/png")
+                self.send_header("content-type", content_type)
                 self.send_header("cache-control", "no-store")
                 self.send_header("access-control-allow-origin", "*")
                 self.send_header("content-length", str(len(data)))

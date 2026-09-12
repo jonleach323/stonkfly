@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 import traceback
 from pathlib import Path
 
@@ -34,7 +35,8 @@ def main():
     run.add_argument("--loss-stop", default="20", help="Stop deploying after this USDC drawdown")
     run.add_argument("--daily-deploys", type=int, default=300)
     run.add_argument("--priority-fee", type=int, default=0, help="Microlamports per compute unit")
-    run.add_argument("--neural-ms", type=float, default=500)
+    run.add_argument("--neural-ms", type=float, default=840, help="Neural time budget per observation (up to 21 picks)")
+    run.add_argument("--step-ms", type=float, default=40, help="Neural time per pick step")
     run.add_argument("--publish", action="store_true", help="Upload public snapshots to Vercel Blob (BLOB_READ_WRITE_TOKEN)")
     serve_cmd = sub.add_parser("serve", help="Serve the watch site locally from a run directory")
     serve_cmd.add_argument("--out", type=Path, default=Path("runs/paper"))
@@ -106,6 +108,7 @@ def main():
         priority_fee_microlamports=a.priority_fee,
         learning=not a.frozen,
         neural_ms=a.neural_ms,
+        step_ms=a.step_ms,
         pulse_ms=min(200, a.neural_ms),
     )
     out = a.out or Path("runs/live" if a.live else "runs/paper")
@@ -118,7 +121,25 @@ def main():
     from .ledger import Ledger
     from .satrush.api import ENDPOINTS, FixtureApi, SatRushApi
 
-    ledger = Ledger(out / "ledger.sqlite", settings, "live" if a.live else "paper")
+    def archive_paper_run(reason):
+        # A paper run whose settings or protocol changed cannot continue its
+        # ledger. Archive it beside the run and start fresh, so an update never
+        # strands the worker. Live runs stop instead: money is involved.
+        nonlocal lock
+        archive = out.parent / f"{out.name}-archive-{time.strftime('%Y%m%d-%H%M%S')}"
+        out.rename(archive)
+        out.mkdir()
+        lock = (out / "worker.lock").open("a")
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        print(json.dumps({"protocol_changed": True, "reason": reason, "archived": str(archive), "note": "paper run restarted from a fresh ledger"}), flush=True)
+
+    try:
+        ledger = Ledger(out / "ledger.sqlite", settings, "live" if a.live else "paper")
+    except RuntimeError as e:
+        if a.live or "mismatch" not in str(e):
+            raise
+        archive_paper_run(str(e))
+        ledger = Ledger(out / "ledger.sqlite", settings, "paper")
     playing = False  # Only a failure while playing halts the ledger; a bad .env is not a state to reconcile.
     try:
         api = (
@@ -151,13 +172,7 @@ def main():
 
             verified = verify()
             controller = FlyController(settings)
-        cp = ledger.get("checkpoint")
-        if cp:
-            path = out / cp["file"]
-            if hashlib.sha256(path.read_bytes()).hexdigest() != cp["sha256"]:
-                raise RuntimeError("Checkpoint integrity mismatch")
-            controller.restore(path)
-            controller.readout.load((ledger.get("observation") or {}).get("readout_state"))
+        controller.write_atlas(out)
         provenance = {
             "settings": dataclasses.asdict(settings),
             "dataset": verified,
@@ -174,10 +189,26 @@ def main():
         if not a.stub_brain:
             provenance["circuit"] = controller.brain.circuit["report"]
             provenance["vision"] = controller.brain.visual_report
-        changed = reconcile_provenance(ledger, out, provenance)
+        try:
+            changed = reconcile_provenance(ledger, out, provenance)
+        except RuntimeError:
+            if a.live:
+                raise
+            ledger.close()
+            archive_paper_run("Run source/protocol changed")
+            ledger = Ledger(out / "ledger.sqlite", settings, "paper")
+            player = paper_player(settings, ledger, api)
+            changed = reconcile_provenance(ledger, out, provenance)
         if changed:
             print(json.dumps({"source_changed": changed, "note": "protocol unchanged; the run continues"}), flush=True)
         (out / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
+        cp = ledger.get("checkpoint")
+        if cp:
+            path = out / cp["file"]
+            if hashlib.sha256(path.read_bytes()).hexdigest() != cp["sha256"]:
+                raise RuntimeError("Checkpoint integrity mismatch")
+            controller.restore(path)
+            controller.readout.load((ledger.get("observation") or {}).get("readout_state"))
         from .guard import Guard
         from .loop import GameLoop
         from .publish import BlobPublisher, write_files

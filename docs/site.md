@@ -4,6 +4,10 @@
 records; it cannot deploy, claim, or change anything. The data contract is
 [`site/STATE.md`](../site/STATE.md).
 
+## The neural replay
+
+The watch page draws the brain as a point cloud that lights up with the spikes of each observation. The worker chooses a fixed subsample of about 16,000 of the 166,700 cells once per run (every readout descending neuron plus a seeded uniform sample of every other cell with an annotated soma, so the brain, its optic lobes and the nerve cord keep their shape) and writes `atlas.bin` / `atlas.json` with their soma positions and classes; photoreceptors have no soma in the dataset and are not drawn. Each observation writes `latest-activity.bin`, the subsample's spikes in ten 50 ms slices; the page replays them at real time with a spike raster of the 21 readout groups. Formats are in [`STATE.md`](../site/STATE.md). It is a picture of an approximate model's activity, not a recording of a fly, and nothing in it feeds back into the game.
+
 ## Everything on one server (default)
 
 `docker compose up -d` runs the worker and the page together; the `watch`

@@ -273,6 +273,7 @@ function renderAll() {
   safe(() => renderDecisions(s));
   safe(() => renderPerf(s));
   safe(() => renderSensory(s));
+  safe(() => renderReplay(s));
   safe(renderBoard);
 }
 
@@ -284,6 +285,7 @@ function renderWaiting() {
   setText("stimulus", "—");
   setChip("pick-meta", "OBSERVATION —", "");
   setText("sensory-meta", text);
+  setChip("replay-chip", text, app.state ? "" : "bad");
   if (!app.state) return;
   const e = $("equity");
   if (e) { e.firstElementChild.textContent = "$—"; e.lastElementChild.textContent = ""; }
@@ -292,7 +294,7 @@ function renderWaiting() {
 /** The worker started over (a not-ready snapshot after a ready one): drop every number from the old one. */
 function resetReady() {
   app.roundsKey = ""; app.decisionsKey = ""; app.chartKey = ""; app.frameSha = null;
-  for (const id of ["pnl", "in-play", "h-cash", "h-inplay", "h-sats", "h-rounds", "h-hit", "s-cash", "s-fees", "s-refunds", "s-sats", "s-best", "perf-chip", "b-spikes", "b-edges", "b-time"]) setText(id, "—");
+  for (const id of ["pnl", "in-play", "h-cash", "h-inplay", "h-sats", "h-rounds", "h-hit", "h-strikes", "h-tickets", "s-cash", "s-fees", "s-refunds", "s-sats", "s-best", "perf-chip", "b-spikes", "b-edges", "b-time"]) setText(id, "—");
   for (const id of ["pnl", "s-best"]) { const n = $(id); if (n) n.className = "num"; }
   setChip("perf-chip", "—", "");
   setText("value-unit", "USDC");
@@ -372,6 +374,19 @@ function renderPick(s) {
       `${roundId != null ? `R#${roundId} · ` : ""}${count} TILE${count === 1 ? "" : "S"} `,
       el("span", { class: "tilelist", text: tiles.length ? `· ${tileList(tiles)}` : "" }),
     ]);
+  }
+  // The order the tiles were picked in, and why the fly stopped.
+  const stepsEl = $("pick-steps");
+  if (stepsEl) {
+    const steps = Array.isArray(n.steps) ? n.steps : null;
+    if (!steps) stepsEl.textContent = "";
+    else {
+      const used = num(n.neural_ms_used);
+      const why = String(n.stop_reason || "").replace("no unpicked group firing unusually high", "nothing left firing unusually high").replace("no unpicked group above its usual rate", "nothing left above its usual rate");
+      stepsEl.textContent = tiles.length
+        ? `Picked one at a time: ${tiles.join(" → ")}. Stopped after ${steps.length} step${steps.length === 1 ? "" : "s"}${used ? ` (${fmtInt(used)} ms)` : ""}: ${why || "done"}.`
+        : "No tile picked.";
+    }
   }
   const status = d0 ? String(d0.status || "").toUpperCase() : "";
   let statusText = status || "—";
@@ -467,6 +482,29 @@ function renderHoldings(s) {
     const chance = num(p.expected_hit_rate_percent) ?? chanceHitRate(s);
     replaceChildren(hitEl, hit === null ? ["—"] : [`${hit.toFixed(1)}%`, el("small", { text: chance === null ? "" : `CHANCE ${chance.toFixed(1)}%` })]);
   }
+  // Sat Strikes: rounds the fly played that carried the strike vault's bonus, and how many it hit.
+  const strikes = $("h-strikes");
+  if (strikes) {
+    const played = num(p.strikes_played);
+    const won = num(p.strike_won_usd);
+    replaceChildren(strikes, played === null ? ["—"] : [`${fmtInt(p.strikes_hit)} / ${fmtInt(played)}`, el("small", { text: won ? `WON ${fmtMoney(won)}` : "NONE HIT" })]);
+  }
+  // Vault tickets are only known for a real wallet; the API does not publish the formula.
+  const tickets = $("h-tickets");
+  if (tickets) {
+    const v = p.vaults;
+    if (s.mode !== "live") replaceChildren(tickets, ["—", el("small", { text: "NO WALLET" })]);
+    else if (!v) replaceChildren(tickets, ["—", el("small", { text: "NOT READ YET" })]);
+    else {
+      const e = v.epoch, o = v.one_btc;
+      const line = `EPOCH ${e ? fmtInt(e.tickets) : 0} · 1 BTC ${o ? fmtInt(o.tickets) : 0}`;
+      const wins = [];
+      if (e && e.rank != null) wins.push(`EPOCH RANK ${e.rank}`);
+      if (num(v.epoch_wins)) wins.push(`${v.epoch_wins} EPOCH WIN${v.epoch_wins === 1 ? "" : "S"}`);
+      if (num(v.one_btc_wins)) wins.push(`WON THE 1 BTC VAULT`);
+      replaceChildren(tickets, [line, el("small", { text: wins.join(" · ") || "NO VAULT WINS" })]);
+    }
+  }
 }
 
 function renderRounds(s) {
@@ -488,6 +526,7 @@ function renderRounds(s) {
     const resultCell = el("td", { class: tone }, [result]);
     if (r.simulated === true) resultCell.append(el("span", { class: "tag", text: "SIM" }));
     else if (status === "PAPER") resultCell.append(el("span", { class: "tag", text: "PAPER" }));
+    if (r.strike) resultCell.append(el("span", { class: "tag strike", text: "STRIKE" }));
     if (r.winning_tile != null) resultCell.append(el("small", { text: `winner ${r.winning_tile}` }));
     const sats = num(r.sats);
     const tx = r.signature
@@ -497,6 +536,8 @@ function renderRounds(s) {
     const pnlCell = el("td", { class: signClass(r.pnl, 4) }, [fmtMoney(r.pnl, { sign: true, digits: 4 })]);
     const token = num(r.token_usd);
     if (token) pnlCell.append(el("small", { text: `incl. ${fmtMoney(token, { digits: 4 })} RUSH` }));
+    const strikeUsd = num(r.strike_usd);
+    if (strikeUsd) pnlCell.append(el("small", { text: `incl. ${fmtMoney(strikeUsd)} strike bonus` }));
     return el("tr", {}, [
       el("td", {}, [`#${r.round_id ?? "—"}`, el("small", { text: fmtTime(r.time) })]),
       resultCell,
@@ -638,6 +679,74 @@ function renderSensory(s) {
   setText("sensory-meta", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)} UTC${sha ? ` · SHA ${sha.slice(0, 8)}` : ""}`);
 }
 
+/** The neural replay: fetch the run's atlas once and each observation's binned activity, hand them to brain.js. */
+function b64bytes(text) {
+  const bin = atob(text);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
+function renderReplay(s) {
+  const pub = s.publication || {};
+  setChip("replay-chip", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)} UTC`, "");
+  const model = s.model || {};
+  setText("replay-count", `${fmtInt(model.neurons ?? NEURONS_DEFAULT)} neurons`);
+  const edges = num(model.edges ?? model.connections);
+  const dn = s.readout && num(s.readout.cells);
+  setText("replay-sub", `${edges === null ? "25.6M" : edges >= 1e6 ? `${(edges / 1e6).toFixed(1)}M` : fmtInt(edges)} connections${dn ? ` · ${fmtInt(dn)} descending neurons` : ""}`);
+  if (!app.brain) { loadBrain(); return; }
+  const atlasSha = DEMO ? (DEMO.atlas ? "demo" : null) : pub.atlas_sha256 || null;
+  if (atlasSha && atlasSha !== app.atlasSha && !app.atlasLoading) {
+    app.atlasLoading = true;
+    const load = DEMO
+      ? Promise.resolve([b64bytes(DEMO.atlas), DEMO.atlas_meta || null])
+      : Promise.all([
+        fetch(apiUrl(`/api/atlas.bin?v=${encodeURIComponent(atlasSha.slice(0, 16))}`), { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(`atlas ${r.status}`); return r.arrayBuffer(); }),
+        fetch(apiUrl("/api/atlas.json"), { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]);
+    load.then(([buffer, meta]) => {
+      app.atlasSha = atlasSha;
+      safe(() => app.brain.setAtlas(buffer, meta));
+      if (meta && meta.n) setText("replay-note", `${fmtInt(meta.n)} of ${fmtInt(meta.of)} simulated cells at their soma positions, lit as they spike over ${fmtInt((s.settings && s.settings.neural_ms) || 500)} ms of neural time, replayed at real time. A model, not a recording.`);
+      if (app.activityPending) { const b = app.activityPending; app.activityPending = null; safe(() => app.brain.setActivity(b)); }
+    }).catch((e) => console.warn("atlas unavailable:", e && e.message ? e.message : e)).finally(() => { app.atlasLoading = false; });
+  }
+  const actSha = DEMO ? (DEMO.activity ? "demo" : null) : pub.activity_sha256 || null;
+  if (actSha && actSha !== app.activitySha && !app.activityLoading) {
+    app.activityLoading = true;
+    const load = DEMO
+      ? Promise.resolve(b64bytes(DEMO.activity))
+      : fetch(apiUrl(`/api/activity.bin?v=${encodeURIComponent(actSha.slice(0, 16))}`), { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(`activity ${r.status}`); return r.arrayBuffer(); });
+    load.then((buffer) => {
+      app.activitySha = actSha;
+      if (app.atlasSha) safe(() => app.brain.setActivity(buffer)); else app.activityPending = buffer;
+    }).catch((e) => console.warn("activity unavailable:", e && e.message ? e.message : e)).finally(() => { app.activityLoading = false; });
+  }
+}
+
+async function loadBrain() {
+  if (app.brain || app.brainLoading || app.brainFailed) return;
+  const canvas = $("brain-canvas");
+  if (!canvas) return;
+  app.brainLoading = true;
+  try {
+    const mod = await import("/brain.js");
+    const view = mod.startBrainView(canvas, { raster: $("raster"), hud: $("replay-rate") });
+    app.brain = view;
+    if (app.paused) safe(() => view.setPaused(true));
+    safe(() => view.setVisible(app.view === "watch" && !document.hidden));
+    if (app.state && app.state.ready) safe(() => renderReplay(app.state));
+  } catch (e) {
+    console.warn("neural replay unavailable:", e && e.message ? e.message : e);
+    app.brainFailed = true;
+    const fb = $("replay-fallback");
+    if (fb) fb.hidden = false;
+  } finally {
+    app.brainLoading = false;
+  }
+}
+
 function renderBoardChip(cb) {
   const b = cb.board;
   if (cb.source === "live") setChip("board-chip", "LIVE BOARD", "ok");
@@ -671,6 +780,7 @@ function renderBoard() {
   setText("round-id", b.round_id != null ? `#${b.round_id}` : "#—");
   setText("pot", fmtMoney(b.pot_usd));
   setText("miners", fmtInt(b.miners));
+  renderVaults(b.vaults);
 
   const stakes = Array.isArray(b.tile_stakes) ? b.tile_stakes : [];
   const top = Math.max(1e-9, ...stakes.map((t) => num(t && t.stake_usd) ?? 0));
@@ -712,6 +822,23 @@ function renderBoard() {
   if (lw) {
     replaceChildren(lw, winners.slice(0, 5).map((w) => el("li", { "aria-label": `Round ${w.round_id}: tile ${w.tile}` }, [String(w.tile ?? "—"), el("small", { text: w.round_id != null ? `#${w.round_id}` : "" })])));
     if (!winners.length) lw.append(el("li", { class: "dim", text: "—" }));
+  }
+}
+
+/** The three prize vaults above the real board: strike, epoch (with its countdown) and 1 BTC. */
+function renderVaults(v) {
+  v = v || {};
+  setText("v-strike", fmtMoney(v.strike_usd));
+  const epoch = $("v-epoch");
+  if (epoch) {
+    const ends = num(v.epoch_ends_at);
+    const left = ends === null ? null : ends - nowMs() / 1000;
+    replaceChildren(epoch, [fmtMoney(v.epoch_usd), el("small", { text: left === null ? "" : (left > 0 ? `ENDS IN ${fmtAge(nowMs() / 1000 - left)}` : "ENDING") })]);
+  }
+  const one = $("v-onebtc");
+  if (one) {
+    const btc = num(v.one_btc_btc);
+    replaceChildren(one, [btc === null ? "—" : `${btc.toFixed(3)} BTC`, el("small", { text: btc === null ? "" : "A TICKET LOTTERY" })]);
   }
 }
 
@@ -853,6 +980,7 @@ function setPaused(paused) {
   const btn = $("pause-btn");
   if (btn) { btn.classList.toggle("on", paused); btn.textContent = paused ? "RESUME MOTION" : "PAUSE MOTION"; }
   if (app.scene) safe(() => app.scene.setPaused(paused));
+  if (app.brain) safe(() => app.brain.setPaused(paused));
 }
 
 /* ---------------- routing and tabs ---------------- */
@@ -872,6 +1000,7 @@ function route() {
   document.title = view === "how" ? "HOW IT WORKS · SAT RUSH FLY" : "SAT RUSH FLY · a fly connectome plays SatRush";
   if (changed && hash !== "main") window.scrollTo(0, 0);
   if (app.scene) safe(() => app.scene.setVisible(view === "watch" && !document.hidden));
+  if (app.brain) safe(() => app.brain.setVisible(view === "watch" && !document.hidden));
   if (view === "watch") loadScene();
 }
 
@@ -922,6 +1051,7 @@ function init() {
   document.querySelectorAll(".scroll").forEach((box) => box.addEventListener("scroll", () => schedule("overflow", markOverflow, 100), { passive: true }));
   document.addEventListener("visibilitychange", () => {
     if (app.scene) safe(() => app.scene.setVisible(app.view === "watch" && !document.hidden));
+    if (app.brain) safe(() => app.brain.setVisible(app.view === "watch" && !document.hidden));
     if (!document.hidden) { schedule("state", pollState, 0); schedule("board", pollBoard, 0); }
   });
   route();

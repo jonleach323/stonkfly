@@ -78,3 +78,20 @@ def test_source_hashes_cover_python_and_cpp(tmp_path):
     (tmp_path / "sub" / "k.cpp").write_text("y")
     (tmp_path / "sub" / "k.so").write_bytes(b"z")
     assert list(source_hashes(tmp_path)) == ["a.py", "sub/k.cpp"]
+
+
+def test_paper_run_archives_itself_on_a_protocol_change(tmp_path):
+    """A stake change is a protocol change: the paper run is archived and restarted."""
+    import subprocess
+    import sqlite3
+    import sys
+
+    out = tmp_path / "paper"
+    base = [sys.executable, "-m", "stonkfly", "run", "--fixture", "--stub-brain", "--steps", "1", "--out", str(out)]
+    subprocess.run(base, check=True, capture_output=True, text=True)
+    second = subprocess.run(base + ["--stake", "2"], check=True, capture_output=True, text=True)
+    assert '"protocol_changed": true' in second.stdout
+    archives = list(tmp_path.glob("paper-archive-*"))
+    assert len(archives) == 1 and (archives[0] / "ledger.sqlite").exists()
+    db = sqlite3.connect(out / "ledger.sqlite")
+    assert json.loads(db.execute("select value from meta where key='tick'").fetchone()[0]) == 1

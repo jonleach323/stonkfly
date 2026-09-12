@@ -97,3 +97,90 @@ def test_frame_geometry_and_content():
 def test_settings_bounds(changes):
     with pytest.raises(ValueError):
         Settings(**changes)
+
+
+def test_count_is_a_neural_quantity_from_one_tile_to_all_21():
+    r, _ = readout(adaptation=2)
+    base = np.full(63, 4, dtype=np.int32)
+    for _ in range(4):
+        r.decode(base, 0.5)
+    assert r.decode(base * 3, 0.5)["tiles"] == list(range(1, 22))  # every group above its own average
+    r2, _ = readout(adaptation=2)
+    for _ in range(4):
+        r2.decode(base * 3, 0.5)
+    assert r2.decode(base, 0.5)["tiles"] == [1]  # every group below: only the argmax stays
+
+
+def test_one_tile_per_step_until_nothing_fires_unusually_high():
+    from stonkfly.readout import WARMUP
+
+    r, _ = readout(adaptation=1000)  # a slow baseline, so the steps below read against a fixed average
+    r.load({"baseline": [8.0] * 21, "variance": [1.0] * 21, "steps": WARMUP})  # usual rate 8 Hz, sd 1 Hz
+    base = np.full(63, 4, dtype=np.int32)  # 8 Hz over 0.5 s
+    chosen = []
+    loud = base.copy()
+    loud[0:3] = 20   # group 1 at 40 Hz
+    loud[30:33] = 6  # group 11 at 12 Hz
+    first = r.step(loud, 0.5, chosen)
+    assert first["pick"] == 1 and first["best_z"] > 1 and not first["warmup"]
+    chosen.append(first["pick"])
+    second = r.step(loud, 0.5, chosen)
+    assert second["pick"] == 11  # the loudest unpicked group, still unusually high
+    chosen.append(second["pick"])
+    third = r.step(loud, 0.5, chosen)
+    assert third["pick"] is None and third["best_z"] < 1  # everything left is at its usual rate: stop
+    # A group a little above average but within a standard deviation does not count.
+    r.load({"baseline": [8.0] * 21, "variance": [4.0] * 21, "steps": WARMUP})
+    mild = base.copy()
+    mild[0:3] = 5  # 10 Hz: z = 2 / 2.5 = 0.8
+    assert r.step(mild, 0.5, [1])["pick"] is None
+    # With every group far above its average, picks continue until all 21 are taken.
+    r2, _ = readout(adaptation=1000)
+    r2.load({"baseline": [8.0] * 21, "variance": [1.0] * 21, "steps": WARMUP})
+    taken = []
+    for _ in range(25):
+        out = r2.step(base * 3, 0.5, taken)
+        if out["pick"] is None:
+            break
+        taken.append(out["pick"])
+    assert sorted(taken) == list(range(1, 22)) and out["pick"] is None
+    # The first pick is always made, even from a quiet network.
+    r3, _ = readout(adaptation=1000)
+    r3.load({"baseline": [24.0] * 21, "variance": [1.0] * 21, "steps": WARMUP})
+    assert r3.step(base, 0.5, [])["pick"] is not None
+    # Before the warm-up the rule is rate above the median rate, and the state round-trips with its variance.
+    r4, _ = readout(adaptation=2)
+    out = r4.step(loud, 0.5, [])
+    assert out["warmup"] and out["pick"] == 1 and out["best_z"] is None
+    for _ in range(WARMUP):
+        r4.step(base, 0.5, [])
+    saved = r4.state()
+    assert saved["steps"] == WARMUP + 1 and len(saved["variance"]) == 21
+    fresh, _ = readout(adaptation=2)
+    fresh.load(saved)
+    assert np.allclose(fresh.variance, r4.variance) and fresh.steps == r4.steps
+    fresh.load([8.0] * 21)  # an older run's bare baseline
+    assert fresh.variance is None and fresh.steps == 0
+
+
+def test_frame_marks_the_picks_so_far():
+    board = FixtureApi(period=60, clock=lambda: 0.0).board()
+    plain = board_frame(board, now=0.0)
+    marked = board_frame(board, now=0.0, picks=[5, 21])
+    x0, y0, x1, y1 = tile_box(4)
+    assert not np.array_equal(plain[y0:y1, x0:x1], marked[y0:y1, x0:x1])
+    x0, y0, x1, y1 = tile_box(0)
+    assert np.array_equal(plain[y0:y1, x0:x1], marked[y0:y1, x0:x1])
+
+
+def test_stub_controller_picks_sequentially():
+    from stonkfly.neural.controller import StubController
+
+    c = StubController(Settings(neural_ms=400, step_ms=40))
+    frames = []
+    out = c.observe(lambda picks: frames.append(list(picks)) or np.zeros((180, 320, 3), np.uint8), "none")
+    assert 1 <= len(out["tiles"]) <= 10 and len(set(out["tiles"])) == len(out["tiles"])
+    assert out["steps"][-1]["tile"] is None or len(out["tiles"]) == 10
+    assert out["stop_reason"] in ("no unpicked group firing unusually high", "step budget", "tile limit", "all 21 tiles")
+    assert frames[0] == [] and all(frames[i] == out["tiles"][:i] for i in range(len(frames)))
+    assert out["neural_ms_used"] == 40 * len(out["steps"])

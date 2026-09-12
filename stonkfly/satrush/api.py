@@ -216,6 +216,14 @@ class SatRushApi:
             f"/v1/users/{wallet}/deployments", wins_only=0, limit=int(limit)
         )
 
+    def user_epoch(self, wallet):
+        """The wallet's epoch-vault entries: tickets, rank and winnings per iteration."""
+        return self._get(f"/v1/users/{wallet}/epoch")
+
+    def user_one_btc(self, wallet):
+        """The wallet's 1 BTC vault entries: tickets per iteration and whether one won."""
+        return self._get(f"/v1/users/{wallet}/one-btc")
+
 
 class FixtureApi:
     """Deterministic synthetic rounds for offline paper runs and tests.
@@ -224,11 +232,12 @@ class FixtureApi:
     Pots are synthetic. Nothing here is real market data or a real game state.
     """
 
-    def __init__(self, period=2.0, seed=7, clock=time.time, fee_bps=600, epoch=None):
+    def __init__(self, period=2.0, seed=7, clock=time.time, fee_bps=600, epoch=None, strike_every=0):
         self.period = float(period)
         self.rng = random.Random(seed)
         self.clock = clock
         self.fee_bps = fee_bps
+        self.strike_every = int(strike_every)  # every Nth round is a Sat Strike (0: never)
         self.epoch = clock() if epoch is None else float(epoch)
         self.results = {}
         self.first_round = 1000
@@ -251,9 +260,13 @@ class FixtureApi:
                     pot_usd = stakes[winner][0] + haircut
                     price = 75_000
                     pot_sats = pot_usd * 100_000_000 // (price * 1_000_000)
+                    strike = self.strike_every > 0 and (rid - self.first_round) % self.strike_every == self.strike_every - 1
                     self.results[rid] = {
                         "id": rid,
                         "state": "finished",
+                        "is_sat_strike": strike,
+                        "strike_bonus_usd": str(pot_usd * 10 if strike else 0),
+                        "strike_bonus_btc": str(pot_sats * 10 if strike else 0),
                         "winning_tile": winner,
                         "tile_stakes": [{"stake": str(s), "deploy_count": c} for s, c in stakes],
                         "deployed_usd_on_winning_tile_amount": str(stakes[winner][0]),

@@ -1,6 +1,7 @@
 """Payout arithmetic checked against a real settled public round."""
 
 import json
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -84,3 +85,42 @@ def test_simulated_extra_deploy():
     assert 0.9 < float(win["pnl_usd"]) < 1.3 and float(lose["pnl_usd"]) < 0
     with pytest.raises(ValueError):
         simulate(1_000_000, 1, {**ROUND, "winning_tile": None}, 600, price)
+
+
+def test_sat_strike_bonus_is_shared_like_the_pot():
+    """Round 56305 was a Sat Strike. Its winners' recorded earnings equal the
+    refund plus a pro-rata share of the strike bonus (USDC and BTC), the same
+    share that splits the pot."""
+    from stonkfly.satrush.rules import simulate, winning_tile_stake
+
+    data = json.loads((Path(__file__).parent / "fixtures/round-56305.json").read_text())["data"]
+    assert data["is_sat_strike"] and int(data["strike_bonus_usd"]) > 0
+    total = winning_tile_stake(data)
+    for record in [d for d in data["deployments"] if d["is_won"]][:5]:
+        share = int(record["winning_usd_stake_amount"]) / total
+        n = bin(int(record["selected_tiles"])).count("1")
+        refund = int(record["total_usd_stake_amount"]) * (n - 1) / n * 0.95
+        usd = refund + share * int(data["strike_bonus_usd"])
+        sats = share * (int(data["total_pot_btc"]) + int(data["strike_bonus_btc"]))
+        assert abs(usd - int(record["usd_earned"])) / int(record["usd_earned"]) < 0.005
+        assert abs(sats - int(record["btc_earned"])) / int(record["btc_earned"]) < 0.005
+
+    # The paper settlement of an extra $1 deploy on this round carries the bonus.
+    price = Decimal("77000")
+    outcome = simulate(1_000_000, (1 << 21) - 1, data, 600, price)
+    assert outcome["won"] and outcome["strike"] and outcome["strike_sats"] > 0
+    assert Decimal(outcome["strike_usd"]) > Decimal("5")  # a 1/21 stake share of a $5,037 bonus
+    plain = simulate(1_000_000, (1 << 21) - 1, {**data, "is_sat_strike": False}, 600, price)
+    assert not plain["strike"] and Decimal(plain["strike_usd"]) == 0
+    assert Decimal(outcome["pnl_usd"]) - Decimal(plain["pnl_usd"]) == (
+        Decimal(outcome["strike_usd"]) + Decimal(outcome["strike_sats"]) / Decimal(10**8) * price
+    ).quantize(Decimal("0.000001"))
+
+
+def test_fixture_strike_rounds():
+    from stonkfly.satrush.api import FixtureApi
+
+    api = FixtureApi(period=1.0, seed=3, clock=lambda: 100.0, epoch=0.0, strike_every=3)
+    rounds = [api.round(1000 + i) for i in range(6)]
+    assert [r["is_sat_strike"] for r in rounds] == [False, False, True, False, False, True]
+    assert int(rounds[2]["strike_bonus_usd"]) > 0 and int(rounds[0]["strike_bonus_usd"]) == 0
