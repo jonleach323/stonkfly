@@ -690,7 +690,7 @@ function renderReplay(s) {
     load.then(([buffer, meta]) => {
       app.atlasSha = atlasSha;
       safe(() => app.brain.setAtlas(buffer, meta));
-      if (meta && meta.n) setText("replay-note", `${fmtInt(meta.n)} of ${fmtInt(meta.of)} simulated cells at their soma positions, lit by their spikes over ${fmtInt((s.settings && s.settings.neural_ms) || 500)} ms of neural time, replayed 2.5× slower. A model, not a recording.`);
+      if (meta && meta.n) setText("replay-note", `${fmtInt(meta.n)} of ${fmtInt(meta.of)} simulated cells at their soma positions, lit by their spikes over ${fmtInt((s.settings && s.settings.neural_ms) || 500)} ms of neural time, replayed at real time. A model, not a recording.`);
       if (app.activityPending) { const b = app.activityPending; app.activityPending = null; safe(() => app.brain.setActivity(b)); }
     }).catch((e) => console.warn("atlas unavailable:", e && e.message ? e.message : e)).finally(() => { app.atlasLoading = false; });
   }

@@ -1,6 +1,6 @@
 // brain.js — the neural replay: a point cloud of a fixed subsample of the
 // simulated neurons, lit by their spikes over the neural time of the last
-// observation, replayed in slow motion. Decorative and schematic: positions
+// observation, replayed at real time. Decorative and schematic: positions
 // are annotated soma locations, activity is the model's, not a fly's.
 //
 // startBrainView(canvas, { raster, hud }) -> { setAtlas, setActivity, setPaused, setVisible, dispose }
@@ -22,7 +22,7 @@ const CLASS_COLORS = [
 ];
 // Dense classes (thousands of cells packed in a small volume) are drawn dimmer so they do not wash out.
 const CLASS_WEIGHT = [0.5, 0.35, 0.6, 0.6, 0.45, 0.35, 1.0, 1.0, 0.8];
-const BINS_PER_SECOND = 8;   // 500 ms of neural time replays in 1.25 s
+const BINS_PER_SECOND = 20;  // 50 ms slices at real time: 500 ms of neural time replays in 500 ms
 const HOLD_SECONDS = 0.9;    // pause on the afterglow before the replay restarts
 
 function readAtlas(buffer) {
