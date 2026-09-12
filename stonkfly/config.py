@@ -35,7 +35,6 @@ class Settings:
     neural_bin_ms: float = 10
     pulse_ms: float = 200
     pulse_current: float = 20
-    reward_deadband: str = "0.01"
     min_tiles: int = 1
     max_tiles: int = 21
     priority_fee_microlamports: int = 0
@@ -58,8 +57,6 @@ class Settings:
             raise ValueError("min_slots_remaining: 5-150 slots")
         if not math.isfinite(self.max_board_age) or self.max_board_age <= 0:
             raise ValueError("Positive board age limit required")
-        if D(self.reward_deadband) <= 0:
-            raise ValueError("Positive reinforcement deadband required")
         if not (
             type(self.min_tiles) is int
             and type(self.max_tiles) is int

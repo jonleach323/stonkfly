@@ -280,18 +280,18 @@
       <article class="panel step" aria-labelledby="step4-title">
         <div class="step-label"><span id="step4-title">04 / FEEDBACK</span><span>CANDIDATE MEMORY</span></div>
         <figure class="fig">
-          <svg viewBox="0 0 440 210" role="img" aria-label="A round gain pulses 15 PAM11 cells, a round loss pulses 2 PPL101 cells; schematic, not measured activity" shape-rendering="crispEdges">
-            <g class="diagram-small"><text x="24" y="24" fill="#bdff32">ROUND GAIN</text><text x="261" y="24" fill="#ff4b78">ROUND LOSS</text></g>
+          <svg viewBox="0 0 440 210" role="img" aria-label="A hit pulses 15 PAM11 cells, a miss pulses 2 PPL101 cells; schematic, not measured activity" shape-rendering="crispEdges">
+            <g class="diagram-small"><text x="24" y="24" fill="#bdff32">HIT</text><text x="261" y="24" fill="#ff4b78">MISS</text></g>
             <path d="M28 79h30V47h48V79h43" fill="none" stroke-width="4" stroke="#bdff32"/>
             <path d="M265 79h30V47h48V79h43" fill="none" stroke-width="4" stroke="#ff4b78"/>
             <g fill="#bdff32"><rect x="31" y="94" width="8" height="8"/><rect x="46" y="94" width="8" height="8"/><rect x="61" y="94" width="8" height="8"/><rect x="76" y="94" width="8" height="8"/><rect x="91" y="94" width="8" height="8"/><rect x="31" y="106" width="8" height="8"/><rect x="46" y="106" width="8" height="8"/><rect x="61" y="106" width="8" height="8"/><rect x="76" y="106" width="8" height="8"/><rect x="91" y="106" width="8" height="8"/><rect x="31" y="118" width="8" height="8"/><rect x="46" y="118" width="8" height="8"/><rect x="61" y="118" width="8" height="8"/><rect x="76" y="118" width="8" height="8"/><rect x="91" y="118" width="8" height="8"/></g>
             <g fill="#ff4b78"><rect x="268" y="94" width="8" height="8"/><rect x="283" y="94" width="8" height="8"/></g>
-            <g class="diagram-small"><text x="24" y="150" fill="#bdff32">15 PAM11</text><text x="261" y="150" fill="#ff4b78">2 PPL101</text><text x="24" y="172" fill="#989aaa">GAIN &gt;= +0.01 USDC</text><text x="261" y="172" fill="#989aaa">LOSS &lt;= -0.01 USDC</text><text x="24" y="194" fill="#989aaa">200 MS PULSE · ONE PER SETTLED ROUND</text></g>
+            <g class="diagram-small"><text x="24" y="150" fill="#bdff32">15 PAM11</text><text x="261" y="150" fill="#ff4b78">2 PPL101</text><text x="24" y="172" fill="#989aaa">WINNING TILE PICKED</text><text x="261" y="172" fill="#989aaa">WINNING TILE MISSED</text><text x="24" y="194" fill="#989aaa">200 MS PULSE · ONE PER SETTLED ROUND</text></g>
           </svg>
           <figcaption>SCHEMATIC · NOT MEASURED ACTIVITY</figcaption>
         </figure>
         <h3>THE ROUND FEEDS BACK.</h3>
-        <p>A settled round of at least <strong>±0.01 USDC</strong> fires a 200 ms pulse into simulated dopamine cells: 15 PAM11 for a gain, two PPL101 for a loss. A candidate memory rule changes selected connections.</p>
+        <p>When a round settles, a <strong>hit</strong> fires a 200 ms pulse into 15 PAM11 dopamine cells and a <strong>miss</strong> fires it into two PPL101 cells. Money is not the signal: fees make even a hit a small loss. A candidate memory rule changes selected connections.</p>
       </article>
     </li>
   </ol>

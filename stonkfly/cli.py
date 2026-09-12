@@ -178,6 +178,7 @@ def main():
             "mode": player.mode,
             "feed": "fixture" if a.fixture else f"satrush-public-{a.network}",
             "game": "SatRush: one deploy per round over the neurally selected tiles; fixed stake; no strategy layer.",
+            "reinforcement": "hit (winning tile among the picks): 200 ms pulse into 15 PAM11 cells; miss: the same pulse into 2 PPL101 cells; money is not the signal",
             "learning_validated": False,
             "pain_receptors_modeled": False,
             "timing": "Each round advances configured neural_ms regardless of wall time; no claim of real-time fly physiology.",

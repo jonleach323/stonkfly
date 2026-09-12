@@ -103,9 +103,7 @@ class GameLoop:
         now = self.clock()
         outcomes = self.player.resolve(board)
         if outcomes:
-            pnl = sum(float(o["pnl_usd"]) for o in outcomes)
-            kind, _ = reinforcement(str(round(pnl, 6)), self.s.reward_deadband)
-            self.l.put("stimulus", kind)
+            self.l.put("stimulus", reinforcement(outcomes))
             self.l.put("last_outcomes", outcomes)
         equity = self.player.equity(board)
         try:
