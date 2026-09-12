@@ -299,7 +299,7 @@ function resetReady() {
   setText("pick-round", "");
   setText("readout-cells", "");
   const note = $("stage-note");
-  if (note) { note.textContent = "DECORATIVE AVATAR"; note.classList.remove("bad"); }
+  if (note) { note.textContent = ""; note.classList.remove("bad"); }
   if ($("minigrid")) replaceChildren($("minigrid"), []);
   replaceChildren($("rounds-body"), [el("tr", {}, el("td", { colspan: "8", class: "dim", text: "WAITING FOR WORKER" }))]);
   replaceChildren($("decisions-body"), [el("tr", {}, el("td", { colspan: "6", class: "dim", text: "WAITING FOR WORKER" }))]);
@@ -329,7 +329,7 @@ function renderBrain(s) {
   const note = $("stage-note");
   if (note) {
     const stub = !!(s.status && s.status.stub_brain);
-    note.textContent = stub ? "STUB BRAIN · SEEDED NOISE" : "DECORATIVE AVATAR";
+    note.textContent = stub ? "STUB BRAIN · SEEDED NOISE" : "";
     note.classList.toggle("bad", stub);
   }
 }
