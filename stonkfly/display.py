@@ -1,10 +1,8 @@
 """Render the public board into a fixed 320x180 RGB frame for the retina.
 
-The frame shows what any spectator sees: stake per tile, recent winning
-tiles, the pot and the round countdown, plus the tiles the fly has picked so
-far in this observation (a closed loop: it sees its own selection grow). It
-never shows this wallet's balance, its past rounds or its P&L, so
-reinforcement stays an explicit stimulus.
+The frame shows only what any spectator sees: stake per tile, recent winning
+tiles, the pot and the round countdown. It never shows this wallet's balance,
+its own past choices or its P&L, so reinforcement stays an explicit stimulus.
 """
 
 import numpy as np
@@ -25,9 +23,7 @@ def tile_box(index):
     return (x, y, x + TILE_W - 1, y + TILE_H - 1)
 
 
-def board_frame(board, now=None, picks=()):
-    """`picks`: tile numbers (1-21) already chosen in this observation, drawn as marked tiles."""
-    picks = {int(t) for t in picks}
+def board_frame(board, now=None):
     im = Image.new("RGB", (WIDTH, HEIGHT), (238, 241, 247))
     d = ImageDraw.Draw(im)
     d.rectangle((0, 0, WIDTH - 1, 23), fill=(19, 36, 71))
@@ -48,10 +44,6 @@ def board_frame(board, now=None, picks=()):
             rank = recent[i + 1]
             color = (200, 30, 60) if rank == 0 else (240, 150, 60)
             d.rectangle((x0 + 1, y0 + 1, x1 - 1, y1 - 1), outline=color, width=3 - min(rank, 2))
-        if i + 1 in picks:
-            # A picked tile: a thick dark frame and a filled corner mark.
-            d.rectangle((x0 + 2, y0 + 2, x1 - 2, y1 - 2), outline=(28, 46, 82), width=3)
-            d.rectangle((x1 - 11, y0 + 3, x1 - 3, y0 + 11), fill=(28, 46, 82))
         d.text((x0 + 3, y0 + 2), f"{i + 1}", fill=(28, 46, 82))
         d.text((x0 + 3, y0 + 22), f"{stakes[i] / 1e6:.0f}", fill=(28, 46, 82))
     seconds = board.seconds_remaining(now)

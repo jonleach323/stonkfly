@@ -149,9 +149,7 @@ def test_audit_and_files(run_dir):
     assert a["ready"] and len(a["deployments"]) == 3 and a["program"].startswith("satRush")
     assert a["deployments"][0]["input_sha256"]
     files = write_files(out)
-    assert set(files) == {"state.json", "audit.json", "sensory.png", "activity.bin"}
-    state = json.loads(files["state.json"][0])
-    assert state["publication"]["activity_sha256"] == hashlib.sha256(files["activity.bin"][0]).hexdigest()
+    assert set(files) == {"state.json", "audit.json", "sensory.png"}
     state = json.loads((out / "site" / "state.json").read_text())
     assert state["publication"]["audit_sha256"] == hashlib.sha256(files["audit.json"][0]).hexdigest()
     assert state["publication"]["frame_sha256"] == hashlib.sha256(files["sensory.png"][0]).hexdigest()
@@ -176,17 +174,13 @@ def test_blob_publisher_requests(run_dir):
     p = BlobPublisher("vercel_blob_rw_STORE123_secretpart", prefix="/fly/", request=fake, announce=lines.append)
     assert p.base_url == "https://STORE123.public.blob.vercel-storage.com/fly"
     urls = p(out)
-    assert set(urls) == {"state.json", "audit.json", "sensory.png", "activity.bin"}
-    publication = json.loads((out / "site" / "state.json").read_text())["publication"]
-    frame_sha, activity_sha = publication["frame_sha256"], publication["activity_sha256"]
-    # Dependencies land before the document that names them; the frame and the activity are content-addressed and immutable.
-    assert [c[0].split("pathname=")[1] for c in calls] == [
-        f"fly%2Fframes%2F{frame_sha}.png", f"fly%2Factivity%2F{activity_sha}.bin", "fly%2Faudit.json", "fly%2Fstate.json",
-    ]
+    assert set(urls) == {"state.json", "audit.json", "sensory.png"}
+    frame_sha = json.loads((out / "site" / "state.json").read_text())["publication"]["frame_sha256"]
+    # Dependencies land before the document that names them; the frame is content-addressed and immutable.
+    assert [c[0].split("pathname=")[1] for c in calls] == [f"fly%2Fframes%2F{frame_sha}.png", "fly%2Faudit.json", "fly%2Fstate.json"]
     assert urls["sensory.png"].endswith(f"/fly/frames/{frame_sha}.png")
-    assert urls["activity.bin"].endswith(f"/fly/activity/{activity_sha}.bin")
-    assert calls[0][2]["x-cache-control-max-age"] == "31536000" and calls[1][2]["x-cache-control-max-age"] == "31536000"
-    url, size, headers = calls[3]
+    assert calls[0][2]["x-cache-control-max-age"] == "31536000"
+    url, size, headers = calls[2]
     assert url == "https://vercel.com/api/blob/?pathname=fly%2Fstate.json" and size > 100
     assert headers["x-vercel-blob-store-id"] == "STORE123" and headers["x-allow-overwrite"] == "1"
     assert headers["x-add-random-suffix"] == "0" and headers["authorization"].startswith("Bearer vercel_blob_rw_")
@@ -195,7 +189,7 @@ def test_blob_publisher_requests(run_dir):
     assert json.loads(lines[0]) == {"publish": {"base_url": "https://store.public.blob.vercel-storage.com/fly", "env": "SNAPSHOT_BASE_URL"}}
     # Nothing changed but the timestamp: only state.json is uploaded again.
     p(out)
-    assert len(calls) == 5 and calls[4][0].endswith("fly%2Fstate.json") and len(lines) == 1
+    assert len(calls) == 4 and calls[3][0].endswith("fly%2Fstate.json") and len(lines) == 1
 
 
 def test_blob_publisher_retries_and_reports(run_dir):
@@ -325,41 +319,3 @@ def test_readonly_ledger_falls_back_to_immutable_without_wal(tmp_path, monkeypat
     assert not copy_dir.exists()
     db.close()
     writer.close()
-
-
-def test_activity_and_atlas_files(run_dir, tmp_path):
-    """The stub worker writes binned activity each observation; the local server serves it and the atlas."""
-    from stonkfly.neural.atlas import BINS, decode_activity, decode_atlas, encode_atlas, stub
-    from stonkfly.neural.controller import StubController
-
-    out, clock = run_dir
-    blob = (out / "latest-activity.bin").read_bytes()
-    act = decode_activity(blob)
-    assert act["bins"] == BINS and act["n"] == 210 and act["tick"] == 3 and act["counts"].shape == (BINS, 210)
-    assert act["bin_ms"] == 84  # the 840 ms observation budget in ten slices
-
-    atlas = stub(210)
-    back = decode_atlas(encode_atlas(atlas))
-    assert back["n"] == 210 and back["xyz"].shape == (210, 3) and list(back["group"][:3]) == [1, 2, 3]
-    ctrl = StubController(Settings(neural_ms=500))
-    ctrl.write_atlas(out)
-    assert (out / "atlas.bin").exists() and json.loads((out / "atlas.json").read_text())["bins"] == BINS
-
-    (tmp_path / "index.html").write_text("<!doctype html>")
-    import stonkfly.serve as serve_module
-
-    original = serve_module.SITE
-    serve_module.SITE = tmp_path
-    server = make_server(out, port=0, board_api=FixtureApi(period=60.0, seed=2, clock=clock))
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    base = f"http://127.0.0.1:{server.server_address[1]}"
-    try:
-        reply = urllib.request.urlopen(base + "/api/activity.bin")
-        assert reply.headers["content-type"] == "application/octet-stream" and reply.read() == blob
-        assert decode_atlas(urllib.request.urlopen(base + "/api/atlas.bin").read())["n"] == 210
-        assert json.loads(urllib.request.urlopen(base + "/api/atlas.json").read())["n"] == 210
-    finally:
-        server.shutdown()
-        server.server_close()
-        serve_module.SITE = original

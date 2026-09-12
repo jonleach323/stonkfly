@@ -35,8 +35,7 @@ def main():
     run.add_argument("--loss-stop", default="20", help="Stop deploying after this USDC drawdown")
     run.add_argument("--daily-deploys", type=int, default=300)
     run.add_argument("--priority-fee", type=int, default=0, help="Microlamports per compute unit")
-    run.add_argument("--neural-ms", type=float, default=840, help="Neural time budget per observation (up to 21 picks)")
-    run.add_argument("--step-ms", type=float, default=40, help="Neural time per pick step")
+    run.add_argument("--neural-ms", type=float, default=500)
     run.add_argument("--publish", action="store_true", help="Upload public snapshots to Vercel Blob (BLOB_READ_WRITE_TOKEN)")
     serve_cmd = sub.add_parser("serve", help="Serve the watch site locally from a run directory")
     serve_cmd.add_argument("--out", type=Path, default=Path("runs/paper"))
@@ -108,7 +107,6 @@ def main():
         priority_fee_microlamports=a.priority_fee,
         learning=not a.frozen,
         neural_ms=a.neural_ms,
-        step_ms=a.step_ms,
         pulse_ms=min(200, a.neural_ms),
     )
     out = a.out or Path("runs/live" if a.live else "runs/paper")
@@ -172,7 +170,6 @@ def main():
 
             verified = verify()
             controller = FlyController(settings)
-        controller.write_atlas(out)
         provenance = {
             "settings": dataclasses.asdict(settings),
             "dataset": verified,

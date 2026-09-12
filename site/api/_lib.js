@@ -92,14 +92,6 @@ export function snapshotFrameUrl(sha, env = process.env) {
   return `${snapshotBaseUrl(env)}/frames/${sha}.png`;
 }
 
-/** A content-addressed file the worker uploaded next to the snapshot (`<dir>/<sha256>.<ext>`), or the origin's live one. */
-export function snapshotAddressedUrl(dir, sha, ext, live, env = process.env) {
-  if (!FRAME_SHA.test(String(sha || ""))) throw new ConfigError("Hash is not a SHA-256 hex digest");
-  const origin = originUrl(env);
-  if (origin) return `${origin}${live}`;
-  return `${snapshotBaseUrl(env)}/${dir}/${sha}.${ext}`;
-}
-
 /** Public SatRush API base, without a trailing slash. */
 export function satrushApiUrl(env = process.env) {
   const explicit = String(env.SATRUSH_API_URL || "").trim().replace(/\/+$/, "");

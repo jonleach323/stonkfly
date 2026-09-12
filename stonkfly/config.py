@@ -31,8 +31,7 @@ class Settings:
     daily_deploys: int = 300
     min_slots_remaining: int = 40  # Never deploy into a round about to close.
     max_board_age: float = 20.0  # Seconds; the board snapshot must be fresh.
-    neural_ms: float = 840  # Neural time budget per observation: up to 21 picks of step_ms.
-    step_ms: float = 40  # Neural time per pick: one tile is chosen (or the fly stops) every step.
+    neural_ms: float = 500
     neural_bin_ms: float = 10
     pulse_ms: float = 200
     pulse_current: float = 20
@@ -71,23 +70,16 @@ class Settings:
             0 <= self.priority_fee_microlamports <= 100_000
         ):
             raise ValueError("Priority fee: 0-100000 microlamports per compute unit")
-        for x in [self.neural_ms, self.step_ms, self.neural_bin_ms, self.pulse_ms, self.pulse_current]:
+        for x in [self.neural_ms, self.neural_bin_ms, self.pulse_ms, self.pulse_current]:
             if not math.isfinite(x) or x <= 0:
                 raise ValueError("Positive finite parameter required")
         if self.neural_bin_ms > 10 or self.pulse_ms > self.neural_ms:
             raise ValueError("Use <=10 ms neural bins; pulse must fit a decision window")
-        if self.step_ms < self.neural_bin_ms or self.step_ms > self.neural_ms:
-            raise ValueError("A pick step must be at least one neural bin and at most the observation budget")
         if any(
             abs(x * 10 - round(x * 10)) > 1e-7
-            for x in [self.neural_ms, self.step_ms, self.neural_bin_ms, self.pulse_ms]
+            for x in [self.neural_ms, self.neural_bin_ms, self.pulse_ms]
         ):
             raise ValueError("Neural intervals must be multiples of 0.1 ms")
-
-    @property
-    def max_steps(self):
-        """Pick steps that fit the observation budget, at most one per tile."""
-        return max(1, min(TILES, int(self.neural_ms / self.step_ms + 1e-9)))
 
     def signature(self):
         return hashlib.sha256(
