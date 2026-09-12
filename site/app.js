@@ -300,7 +300,7 @@ function resetReady() {
   setText("readout-cells", "");
   const note = $("stage-note");
   if (note) { note.textContent = "DECORATIVE AVATAR"; note.classList.remove("bad"); }
-  replaceChildren($("minigrid"), []);
+  if ($("minigrid")) replaceChildren($("minigrid"), []);
   replaceChildren($("rounds-body"), [el("tr", {}, el("td", { colspan: "8", class: "dim", text: "WAITING FOR WORKER" }))]);
   replaceChildren($("decisions-body"), [el("tr", {}, el("td", { colspan: "6", class: "dim", text: "WAITING FOR WORKER" }))]);
   const chart = $("equity-chart");

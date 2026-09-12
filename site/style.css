@@ -133,7 +133,6 @@ strong { color: var(--ink); }
   .stage-note { margin-left: 0; flex-basis: 100%; order: 2; }
 }
 .theater .brain-bar { margin-top: 16px; }
-.theater .pick { margin-top: 16px; }
 
 .stage { position: relative; background: #000; border: 2px solid var(--line); box-shadow: var(--shadow); }
 #output { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 11; background: #000; cursor: grab; touch-action: pan-y; }
@@ -163,18 +162,6 @@ strong { color: var(--ink); }
   .brain-bar > div:nth-child(-n + 2) { border-bottom: 2px solid var(--line); }
 }
 
-.minigrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; list-style: none; margin: 0; padding: 0; }
-.minigrid li {
-  aspect-ratio: 1.25; display: grid; place-items: center; font: 8px var(--pixel);
-  background: var(--bg); border: 2px solid var(--line); color: var(--muted);
-}
-.minigrid li.lit { background: var(--acid); border-color: var(--acid); color: #000; box-shadow: var(--shadow-sm); }
-.minigrid li.top { outline: 2px solid var(--ink); outline-offset: -4px; }
-.pick-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 0; font-size: 13px; }
-.pick-line .tilelist { color: var(--muted); }
-.stimulus { margin: 10px 0 0; font: 8px/1.9 var(--pixel); text-transform: uppercase; color: var(--muted); }
-.stimulus.reward { color: var(--acid); }
-.stimulus.aversive { color: var(--red); }
 
 /* ---------- account ---------- */
 .stack-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
