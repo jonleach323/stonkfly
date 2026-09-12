@@ -240,8 +240,8 @@ def test_local_server_routes(run_dir, tmp_path):
         assert png.headers["content-type"] == "image/png"
         page = urllib.request.urlopen(base + "/")
         assert b"<title>t</title>" in page.read()
-        # Static files must revalidate; the API documents are never cached.
-        assert page.headers["cache-control"] == "no-cache"
+        # Neither static files nor the API documents are ever cached (Cloudflare would otherwise keep scripts for hours).
+        assert page.headers["cache-control"] == "no-store"
         assert reply.headers["cache-control"] == "no-store"
         with pytest.raises(urllib.error.HTTPError):
             urllib.request.urlopen(base + "/api/nope")

@@ -107,11 +107,12 @@ class Handler(SimpleHTTPRequestHandler):
     static = False
 
     def end_headers(self):
-        # Static files revalidate on every load (they carry Last-Modified, so
-        # unchanged ones answer 304). Without this, Cloudflare and browsers keep
-        # scripts for hours and a rebuilt page shows the old screen.
+        # Static files are never cached. Cloudflare treats no-cache as cacheable
+        # at its edge and hands scripts out with a four-hour browser TTL, so a
+        # rebuilt page kept showing the old screen; no-store is passed through.
+        # The whole page is a few hundred kilobytes, so refetching is cheap.
         if self.static:
-            self.send_header("cache-control", "no-cache")
+            self.send_header("cache-control", "no-store")
         super().end_headers()
 
 

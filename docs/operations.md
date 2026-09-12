@@ -65,7 +65,7 @@ If the server already serves other subdomains, do not use the `https` profile (i
 - **Cloudflare Tunnel (cloudflared):** add the ingress rule from `deploy/cloudflared-ingress.example.yml` for the new hostname to your tunnel's `config.yml`, then add the DNS route: `cloudflared tunnel route dns <tunnel> fly.example.com` and restart cloudflared.
 - **Proxied DNS + your own reverse proxy:** add an A/AAAA record for the subdomain in Cloudflare (proxied) and a server block like `deploy/nginx-watch.conf` (or the Caddy equivalent, `fly.example.com { reverse_proxy 127.0.0.1:8787 }`) that proxies to `127.0.0.1:8787`.
 
-Cloudflare's default cache does not store HTML or `/api/*` (the functions send `no-store` or `max-age=1`), and the scripts are sent with `no-cache` so a rebuilt page is picked up on the next load. The page polls every two seconds; that is a few requests per viewer per second at most, well within the free plan.
+Cloudflare's default cache does not store HTML or `/api/*` (the functions send `no-store` or `max-age=1`), and the page's own files are sent with `no-store` so a rebuilt page is picked up on the next load without a purge. The page polls every two seconds; that is a few requests per viewer per second at most, well within the free plan.
 
 ### Updating
 
@@ -75,7 +75,7 @@ docker compose build                    # one image for both services; `build wa
 docker compose up -d --force-recreate   # the worker rebuilds nothing: the dataset volume persists
 ```
 
-Until the worker is back (it reloads the graph for a minute or two), `/api/state` reports `ready: false` and the page shows the boot screen. If a browser still shows the old page after that, reload with the cache bypassed (Ctrl+Shift+R / Cmd+Shift+R), or purge the hostname in the Cloudflare dashboard once; pages built before this note were cached for four hours.
+Until the worker is back (it reloads the graph for a minute or two), `/api/state` reports `ready: false` and the page shows the boot screen. If a browser still shows the old page after that, purge the hostname once in the Cloudflare dashboard (Caching → Configuration → Purge Everything) and reload: builds before this note let Cloudflare cache the scripts for four hours.
 
 The dataset lives in the `data` volume (built once, about 1.6 GB) and run state in the `runs` volume; `docker compose down` keeps both, `docker compose down -v` deletes them. A halt (loss stop, unknown deploy outcome) exits the worker cleanly and it stays down until you review; see recovery below. Outages of the SatRush API or the RPC are not halts: the worker backs off (5 s doubling to 60 s), reports `retrying after …` as its phase on the watch page, and resumes on its own. `deploy/stonkfly-*.service` are systemd units for a bare-metal install with the same entrypoint.
 
