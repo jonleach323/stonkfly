@@ -105,7 +105,7 @@
       <p class="pick-line"><span class="chip" id="pick-status">WAITING</span> <span id="pick-tiles">WAITING FOR WORKER</span></p>
       <p class="stimulus" id="stimulus" aria-live="polite">—</p>
       <p class="fine" id="pick-steps">—</p>
-      <p class="fine">Fixed readout, one tile at a time. Every 40 ms the group of descending neurons firing most above its usual rate picks its tile. When none is above, the fly stops. Not a strategy.</p>
+      <p class="fine">Fixed readout, one tile at a time. Every 40 ms the group of descending neurons firing most above its usual rate picks its tile, if it is unusually high: over a standard deviation above. When none is, the fly stops. Not a strategy.</p>
     </section>
   </section>
 
@@ -305,7 +305,7 @@
           <figcaption id="how-execution">READING EXECUTION MODE…</figcaption>
         </figure>
         <h3>A SPIKE CAN BECOME A DEPLOY.</h3>
-        <p>A fixed readout turns descending-neuron spikes into tiles<span id="readout-cells"></span>, <strong>one at a time</strong>: every 40 ms the group firing most above its usual rate picks its tile, and the fly sees its picks on the board. When no group is above its usual rate, it stops. A guard checks timing, budget and count. It can veto, never choose. At most <strong>one deploy per round</strong>.</p>
+        <p>A fixed readout turns descending-neuron spikes into tiles<span id="readout-cells"></span>, <strong>one at a time</strong>: every 40 ms the group firing most above its usual rate picks its tile if it is unusually high, over a standard deviation above, and the fly sees its picks on the board. When no group is, it stops. A guard checks timing, budget and count. It can veto, never choose. At most <strong>one deploy per round</strong>.</p>
       </article>
     </li>
     <li>

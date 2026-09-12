@@ -382,7 +382,7 @@ function renderPick(s) {
     if (!steps) stepsEl.textContent = "";
     else {
       const used = num(n.neural_ms_used);
-      const why = String(n.stop_reason || "").replace("no unpicked group above its usual rate", "nothing left above its usual rate");
+      const why = String(n.stop_reason || "").replace("no unpicked group firing unusually high", "nothing left firing unusually high").replace("no unpicked group above its usual rate", "nothing left above its usual rate");
       stepsEl.textContent = tiles.length
         ? `Picked one at a time: ${tiles.join(" → ")}. Stopped after ${steps.length} step${steps.length === 1 ? "" : "s"}${used ? ` (${fmtInt(used)} ms)` : ""}: ${why || "done"}.`
         : "No tile picked.";

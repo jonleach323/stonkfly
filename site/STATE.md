@@ -91,8 +91,8 @@ with six decimals. Times are Unix seconds (floats). `null` means unknown.
       "stimulus": "none" | "reward" | "aversive", "kc_spikes": 4376, "changed_edges": 1795, "median_excess_hz": 4.186 }
   ],
   "neural": {
-    "steps": [ { "tile": 3, "excess_rel": 0.41, "ms": 40 }, … , { "tile": null, "excess_rel": -0.02, "ms": 200 } ],  // one entry per 40 ms pick step; a null tile is the stop
-    "stop_reason": "no unpicked group above its usual rate" | "all 21 tiles" | "tile limit" | "step budget",
+    "steps": [ { "tile": 3, "excess_rel": 0.41, "z": 2.1, "ms": 40 }, … , { "tile": null, "excess_rel": 0.02, "z": 0.4, "ms": 200 } ],  // one entry per 40 ms pick step; a null tile is the stop; z null during the run's warm-up
+    "stop_reason": "no unpicked group firing unusually high" | "all 21 tiles" | "tile limit" | "step budget",
     "neural_ms_used": 200,                          // latest observation
     "tiles": [1,2,3,4,5,6,8,9,12,21],
     "group_hz": [36.156, … 21 values],  // mean rate of each tile's neuron group

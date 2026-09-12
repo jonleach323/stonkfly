@@ -82,9 +82,9 @@ class FlyController:
             step_counts = run(s.step_ms, frame)
             counts += step_counts
             last = self.readout.step(step_counts, s.step_ms / 1000, chosen)
-            steps.append({"tile": last["pick"], "excess_rel": last["best_excess_rel"], "ms": round(elapsed_ms, 1)})
+            steps.append({"tile": last["pick"], "excess_rel": last["best_excess_rel"], "z": last["best_z"], "ms": round(elapsed_ms, 1)})
             if last["pick"] is None:
-                stop_reason = "no unpicked group above its usual rate"
+                stop_reason = "no unpicked group firing unusually high"
                 break
             chosen.append(last["pick"])
             if len(chosen) >= s.max_tiles:
@@ -169,9 +169,9 @@ class StubController:
             counts += step_counts
             elapsed += s.step_ms
             last = self.readout.step(step_counts, s.step_ms / 1000, chosen)
-            steps.append({"tile": last["pick"], "excess_rel": last["best_excess_rel"], "ms": round(elapsed, 1)})
+            steps.append({"tile": last["pick"], "excess_rel": last["best_excess_rel"], "z": last["best_z"], "ms": round(elapsed, 1)})
             if last["pick"] is None:
-                stop_reason = "no unpicked group above its usual rate"
+                stop_reason = "no unpicked group firing unusually high"
                 break
             chosen.append(last["pick"])
             if len(chosen) >= s.max_tiles:
