@@ -506,6 +506,7 @@ function buildMonitor(scene, screenTexture, yaw) {
     new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, depthTest: false }),
   );
   cursor.renderOrder = 2;
+  cursor.scale.setScalar(1.35);
   cursor.position.set(0.1, 0.5, 0.152);
   group.add(cursor);
 
@@ -885,7 +886,7 @@ export function startScene(canvas) {
     // The fly's cursor: where it is on the screen (canvas pixels) and the
     // sequence of tiles it is pressing for the current observation.
     cursor: new THREE.Vector2(START_RECT.x + START_RECT.w / 2, START_RECT.y + START_RECT.h / 2),
-    press: { queue: [], index: -1, phase: 'idle', phaseEnd: 0, t0: 0, dur: 0, from: new THREE.Vector2(), to: new THREE.Vector2(), selected: [], pressing: null, deployed: false, started: false, idleBase: new THREE.Vector2() },
+    press: { queue: [], index: -1, phase: 'idle', phaseEnd: 0, t0: 0, dur: 0, from: new THREE.Vector2(), to: new THREE.Vector2(), selected: [], pressing: null, deployed: false, started: false, idleBase: new THREE.Vector2(), tick: null, idleSince: 0 },
     t: 0,
     burstUntil: 0,       // wing flutter
     shudderUntil: 0,     // aversive twitch
@@ -915,8 +916,9 @@ export function startScene(canvas) {
   // each (the tile lights up as it is pressed), then presses START. Between
   // observations it idles near where it stopped.
   const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
-  function startPresses(tiles, t) {
+  function startPresses(tiles, t, tick) {
     const press = anim.press;
+    press.tick = tick;
     press.queue = tiles.filter((n) => Number.isInteger(n) && n >= 1 && n <= 21);
     press.index = -1;
     press.selected = [];
@@ -938,26 +940,28 @@ export function startScene(canvas) {
   function advancePresses(t) {
     const press = anim.press;
     if (press.phase === 'idle') {
-      // A slow drift, like a hand resting on the mouse.
+      // A slow drift, like a hand resting on the mouse; after a pause the fly
+      // runs through its picks again, so the clicking is always on show.
       anim.cursor.set(press.idleBase.x + 14 * Math.sin(t * 0.6), press.idleBase.y + 9 * Math.sin(t * 0.9 + 1));
+      if (press.queue.length && t - press.idleSince > 4) startPresses(press.queue, t, press.tick);
       return false;
     }
     if (press.phase === 'gap' && t >= press.phaseEnd) {
       press.index += 1;
       if (press.index < press.queue.length) moveTo(tileCenter(press.queue[press.index]), t);
       else if (press.index === press.queue.length && press.queue.length) moveTo({ x: START_RECT.x + START_RECT.w / 2, y: START_RECT.y + START_RECT.h / 2 }, t);
-      else { press.phase = 'idle'; press.idleBase.copy(anim.cursor); }
+      else { press.phase = 'idle'; press.idleBase.copy(anim.cursor); press.idleSince = t; }
       return false;
     }
     if (press.phase === 'move') {
       const p = Math.min(1, (t - press.t0) / press.dur);
       anim.cursor.lerpVectors(press.from, press.to, ease(p));
-      if (p >= 1) { press.phase = 'hold'; press.phaseEnd = t + 0.09; }
+      if (p >= 1) { press.phase = 'hold'; press.phaseEnd = t + 0.14; }
       return false;
     }
     if (press.phase === 'hold' && t >= press.phaseEnd) {
       press.phase = 'click';
-      press.phaseEnd = t + 0.16;
+      press.phaseEnd = t + 0.22;
       if (press.index < press.queue.length) {
         press.pressing = press.queue[press.index];
         press.selected = press.selected.concat(press.pressing);
@@ -986,6 +990,9 @@ export function startScene(canvas) {
 
   function animate(t, dt) {
     anim.t = t;
+    const shown = latestState && latestState.tick != null ? latestState.tick : null;
+    const tiles = latestState && latestState.neural && Array.isArray(latestState.neural.tiles) ? latestState.neural.tiles : null;
+    if (shown !== null && shown !== anim.press.tick && tiles) startPresses(tiles, t, shown);
     if (advancePresses(t)) paintMonitor();
     skyline.updateRain(dt);
     // Camera sway around home; the user's drag offset is added on top.
@@ -1227,7 +1234,6 @@ export function startScene(canvas) {
     if (tick !== null && tick !== anim.lastTick) {
       const first = anim.lastTick === null;
       anim.lastTick = tick;
-      if (anim.running && Array.isArray(neural.tiles)) startPresses(neural.tiles, anim.t);
       if (!first && anim.running) {
         if (neural.stimulus === 'reward') {
           anim.burstUntil = anim.t + 1.2;
