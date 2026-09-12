@@ -97,3 +97,15 @@ def test_frame_geometry_and_content():
 def test_settings_bounds(changes):
     with pytest.raises(ValueError):
         Settings(**changes)
+
+
+def test_count_is_a_neural_quantity_from_one_tile_to_all_21():
+    r, _ = readout(adaptation=2)
+    base = np.full(63, 4, dtype=np.int32)
+    for _ in range(4):
+        r.decode(base, 0.5)
+    assert r.decode(base * 3, 0.5)["tiles"] == list(range(1, 22))  # every group above its own average
+    r2, _ = readout(adaptation=2)
+    for _ in range(4):
+        r2.decode(base * 3, 0.5)
+    assert r2.decode(base, 0.5)["tiles"] == [1]  # every group below: only the argmax stays

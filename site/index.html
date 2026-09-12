@@ -115,6 +115,11 @@
         <div><span class="label">MINERS</span><span class="num" id="miners">—</span></div>
         <div><span class="label">ENDS IN</span><span class="num" id="countdown">—</span></div>
       </div>
+      <dl class="vaults" aria-label="Prize vaults">
+        <div><dt>STRIKE VAULT</dt><dd class="num" id="v-strike">—</dd></div>
+        <div><dt>EPOCH VAULT</dt><dd class="num" id="v-epoch">—</dd></div>
+        <div><dt>1 BTC VAULT</dt><dd class="num" id="v-onebtc">—</dd></div>
+      </dl>
       <div class="countdown" id="countdown-bar" role="progressbar" aria-label="Round time remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="countdown-fill"></span></div>
       <ol class="tiles" id="tiles" aria-label="21 tiles shaded by stake; the fly's picks are outlined, the last winning tile is red"></ol>
       <div class="legend">
@@ -134,8 +139,10 @@
       <div><dt>SATS WON</dt><dd class="num" id="h-sats">—</dd></div>
       <div><dt>TILE HITS / ROUNDS</dt><dd class="num" id="h-rounds">—</dd></div>
       <div><dt>HIT RATE</dt><dd class="num" id="h-hit">—</dd></div>
+      <div><dt>SAT STRIKES</dt><dd class="num" id="h-strikes">—</dd></div>
+      <div><dt>VAULT TICKETS</dt><dd class="num" id="h-tickets">—</dd></div>
     </dl>
-    <p class="fine holdings-note">A hit: the winning tile was among the picks. Ten picks hit 10 rounds in 21 by luck. A hit is not a profit. Fees come first.</p>
+    <p class="fine holdings-note">A hit: the winning tile was among the picks. Ten picks hit 10 rounds in 21 by luck. A hit is not a profit. Fees come first. A Sat Strike round pays the strike vault to its winners. Vault tickets need a wallet.</p>
   </section>
 
   <section class="panel activity" aria-labelledby="activity-title">

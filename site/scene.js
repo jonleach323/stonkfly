@@ -953,10 +953,8 @@ export function startScene(canvas) {
   function advancePresses(t) {
     const press = anim.press;
     if (press.phase === 'idle') {
-      // A slow drift, like a hand resting on the mouse; after a pause the fly
-      // runs through its picks again, so the clicking is always on show.
+      // A slow drift, like a hand resting on the mouse, until the next observation.
       anim.cursor.set(press.idleBase.x + 14 * Math.sin(t * 0.6), press.idleBase.y + 9 * Math.sin(t * 0.9 + 1));
-      if (press.queue.length && t - press.idleSince > 6) startPresses(press.queue, t, press.tick);
       return false;
     }
     if (press.phase === 'gap' && t >= press.phaseEnd) {

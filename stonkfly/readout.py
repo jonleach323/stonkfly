@@ -3,13 +3,14 @@
 Every neuron whose annotated type starts with "DN" is sorted by body ID and cut
 into 21 contiguous groups. Each group keeps an exponential moving average of
 its own firing rate (a stand-in for sensory adaptation). A tile is selected
-when its group's relative excess, (rate - baseline) / (baseline + 1 Hz),
-exceeds the median relative excess across groups; the group with the largest
-excess is always selected. Relative excess removes network-wide rate swings
-(the whole graph moves between quiet and active regimes) so that a global
-ramp does not reproduce the raw rate ranking round after round. On the first
-observation the baseline is the observation itself, so the raw median rule
-applies. The mapping is arbitrary, fixed before any round is played, and
+when its group fires above its own running average, that is when its relative
+excess, (rate - baseline) / (baseline + 1 Hz), is positive; the group with
+the largest excess is always selected. Nothing caps the count except the
+configured bounds: a quiet network proposes one tile, a network-wide surge
+above the lagging baselines can propose all 21. Relative excess keeps a
+persistent rate ranking from deciding the tiles round after round. On the
+first observation there is no baseline yet, so the tiles above the median
+rate are selected. The mapping is arbitrary, fixed before any round is played, and
 logs its cell identities. It is an engineered interface, not a discovery of
 "tile neurons". No game state enters the decode.
 """
@@ -39,11 +40,11 @@ class TileReadout:
             str(i + 1): [str(ids[j]) for j in g] for i, g in enumerate(self.groups)
         }
         self.report = {
-            "model": "dn-21-group-relative-median-v3",
+            "model": "dn-21-group-relative-baseline-v4",
             "cells": int(len(members)),
             "group_sizes": [int(len(g)) for g in self.groups],
             "adaptation_observations": adaptation,
-            "rule": "excess = (group mean rate - running average of that group's rate) / (running average + 1 Hz); tile selected if excess > median excess; argmax always selected; then clipped to [min_tiles, max_tiles] by excess rank",
+            "rule": "excess = (group mean rate - running average of that group's rate) / (running average + 1 Hz); tile selected if excess > 0 (above median rate on the first observation); argmax always selected; then clipped to [min_tiles, max_tiles] by excess rank",
             "validated": False,
         }
 
@@ -71,7 +72,8 @@ class TileReadout:
             excess = excess_hz / (self.baseline + 1.0)
         median = float(np.median(excess))
         order = np.argsort(-excess, kind="stable")
-        chosen = {int(i) for i in np.flatnonzero(excess > median)}
+        threshold = median if self.baseline is None else 0.0
+        chosen = {int(i) for i in np.flatnonzero(excess > threshold)}
         chosen.add(int(order[0]))
         ranked = [int(i) for i in order if int(i) in chosen]
         if len(ranked) > self.max_tiles:

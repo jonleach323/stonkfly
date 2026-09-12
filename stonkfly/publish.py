@@ -201,6 +201,9 @@ def _round_row(row):
         "sats": outcome.get("sats"),
         "sats_usd": _money(outcome["sats_usd"]) if outcome.get("sats_usd") is not None else None,
         "token_usd": _money(outcome["token_usd"]) if outcome.get("token_usd") is not None else None,
+        "strike": bool(outcome.get("strike")) if outcome else None,
+        "strike_usd": _money(outcome["strike_usd"]) if outcome.get("strike_usd") is not None else None,
+        "hashrate": outcome.get("hashrate"),
         "fee": _money(fee) if fee is not None else None,
         "pnl": _money(outcome["pnl_usd"]) if outcome.get("pnl_usd") is not None else None,
         "simulated": outcome.get("simulated"),
@@ -247,6 +250,10 @@ def snapshot(out, now=None):
     refunds_total = sum((D(d["outcome"].get("refund_usd") or 0) for d in settled), D(0))
     deployed_total = sum((D(d["plan"]["stake_usd"]) for d in settled), D(0))
     best = max((D(d["outcome"]["pnl_usd"]) for d in settled if d["outcome"].get("pnl_usd") is not None), default=None)
+    strikes_played = sum(1 for d in settled if d["outcome"].get("strike"))
+    strikes_hit = sum(1 for d in won if d["outcome"].get("strike"))
+    strike_usd_total = sum((D(d["outcome"].get("strike_usd") or 0) for d in settled), D(0))
+    hashrate_total = sum(int(d["outcome"].get("hashrate") or 0) for d in settled)
     day_start = now - now % 86400
     deploys_today = sum(1 for d in deployments if d["created"] >= day_start and d["status"] != "FAILED")
     history = [{"time": e["wall_time"], "equity": e["equity_usdc"]} for e in events if "equity_usdc" in e]
@@ -336,6 +343,11 @@ def snapshot(out, now=None):
             "hit_rate_percent": _money(D(len(won)) / D(len(settled)) * 100) if settled else None,
             "best_round_pnl": _money(best) if best is not None else None,
             "open_rounds": [d["round_id"] for d in open_rows],
+            "strikes_played": strikes_played,
+            "strikes_hit": strikes_hit,
+            "strike_won_usd": _money(strike_usd_total),
+            "hashrate": hashrate_total,
+            "vaults": meta.get("vault_positions"),
         },
         "rounds": [_round_row(d) for d in deployments[:30]],
         "round_count": len(deployments),

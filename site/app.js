@@ -292,7 +292,7 @@ function renderWaiting() {
 /** The worker started over (a not-ready snapshot after a ready one): drop every number from the old one. */
 function resetReady() {
   app.roundsKey = ""; app.decisionsKey = ""; app.chartKey = ""; app.frameSha = null;
-  for (const id of ["pnl", "in-play", "h-cash", "h-inplay", "h-sats", "h-rounds", "h-hit", "s-cash", "s-fees", "s-refunds", "s-sats", "s-best", "perf-chip", "b-spikes", "b-edges", "b-time"]) setText(id, "—");
+  for (const id of ["pnl", "in-play", "h-cash", "h-inplay", "h-sats", "h-rounds", "h-hit", "h-strikes", "h-tickets", "s-cash", "s-fees", "s-refunds", "s-sats", "s-best", "perf-chip", "b-spikes", "b-edges", "b-time"]) setText(id, "—");
   for (const id of ["pnl", "s-best"]) { const n = $(id); if (n) n.className = "num"; }
   setChip("perf-chip", "—", "");
   setText("value-unit", "USDC");
@@ -467,6 +467,29 @@ function renderHoldings(s) {
     const chance = num(p.expected_hit_rate_percent) ?? chanceHitRate(s);
     replaceChildren(hitEl, hit === null ? ["—"] : [`${hit.toFixed(1)}%`, el("small", { text: chance === null ? "" : `CHANCE ${chance.toFixed(1)}%` })]);
   }
+  // Sat Strikes: rounds the fly played that carried the strike vault's bonus, and how many it hit.
+  const strikes = $("h-strikes");
+  if (strikes) {
+    const played = num(p.strikes_played);
+    const won = num(p.strike_won_usd);
+    replaceChildren(strikes, played === null ? ["—"] : [`${fmtInt(p.strikes_hit)} / ${fmtInt(played)}`, el("small", { text: won ? `WON ${fmtMoney(won)}` : "NONE HIT" })]);
+  }
+  // Vault tickets are only known for a real wallet; the API does not publish the formula.
+  const tickets = $("h-tickets");
+  if (tickets) {
+    const v = p.vaults;
+    if (s.mode !== "live") replaceChildren(tickets, ["—", el("small", { text: "NO WALLET" })]);
+    else if (!v) replaceChildren(tickets, ["—", el("small", { text: "NOT READ YET" })]);
+    else {
+      const e = v.epoch, o = v.one_btc;
+      const line = `EPOCH ${e ? fmtInt(e.tickets) : 0} · 1 BTC ${o ? fmtInt(o.tickets) : 0}`;
+      const wins = [];
+      if (e && e.rank != null) wins.push(`EPOCH RANK ${e.rank}`);
+      if (num(v.epoch_wins)) wins.push(`${v.epoch_wins} EPOCH WIN${v.epoch_wins === 1 ? "" : "S"}`);
+      if (num(v.one_btc_wins)) wins.push(`WON THE 1 BTC VAULT`);
+      replaceChildren(tickets, [line, el("small", { text: wins.join(" · ") || "NO VAULT WINS" })]);
+    }
+  }
 }
 
 function renderRounds(s) {
@@ -488,6 +511,7 @@ function renderRounds(s) {
     const resultCell = el("td", { class: tone }, [result]);
     if (r.simulated === true) resultCell.append(el("span", { class: "tag", text: "SIM" }));
     else if (status === "PAPER") resultCell.append(el("span", { class: "tag", text: "PAPER" }));
+    if (r.strike) resultCell.append(el("span", { class: "tag strike", text: "STRIKE" }));
     if (r.winning_tile != null) resultCell.append(el("small", { text: `winner ${r.winning_tile}` }));
     const sats = num(r.sats);
     const tx = r.signature
@@ -497,6 +521,8 @@ function renderRounds(s) {
     const pnlCell = el("td", { class: signClass(r.pnl, 4) }, [fmtMoney(r.pnl, { sign: true, digits: 4 })]);
     const token = num(r.token_usd);
     if (token) pnlCell.append(el("small", { text: `incl. ${fmtMoney(token, { digits: 4 })} RUSH` }));
+    const strikeUsd = num(r.strike_usd);
+    if (strikeUsd) pnlCell.append(el("small", { text: `incl. ${fmtMoney(strikeUsd)} strike bonus` }));
     return el("tr", {}, [
       el("td", {}, [`#${r.round_id ?? "—"}`, el("small", { text: fmtTime(r.time) })]),
       resultCell,
@@ -671,6 +697,7 @@ function renderBoard() {
   setText("round-id", b.round_id != null ? `#${b.round_id}` : "#—");
   setText("pot", fmtMoney(b.pot_usd));
   setText("miners", fmtInt(b.miners));
+  renderVaults(b.vaults);
 
   const stakes = Array.isArray(b.tile_stakes) ? b.tile_stakes : [];
   const top = Math.max(1e-9, ...stakes.map((t) => num(t && t.stake_usd) ?? 0));
@@ -712,6 +739,23 @@ function renderBoard() {
   if (lw) {
     replaceChildren(lw, winners.slice(0, 5).map((w) => el("li", { "aria-label": `Round ${w.round_id}: tile ${w.tile}` }, [String(w.tile ?? "—"), el("small", { text: w.round_id != null ? `#${w.round_id}` : "" })])));
     if (!winners.length) lw.append(el("li", { class: "dim", text: "—" }));
+  }
+}
+
+/** The three prize vaults above the real board: strike, epoch (with its countdown) and 1 BTC. */
+function renderVaults(v) {
+  v = v || {};
+  setText("v-strike", fmtMoney(v.strike_usd));
+  const epoch = $("v-epoch");
+  if (epoch) {
+    const ends = num(v.epoch_ends_at);
+    const left = ends === null ? null : ends - nowMs() / 1000;
+    replaceChildren(epoch, [fmtMoney(v.epoch_usd), el("small", { text: left === null ? "" : (left > 0 ? `ENDS IN ${fmtAge(nowMs() / 1000 - left)}` : "ENDING") })]);
+  }
+  const one = $("v-onebtc");
+  if (one) {
+    const btc = num(v.one_btc_btc);
+    replaceChildren(one, [btc === null ? "—" : `${btc.toFixed(3)} BTC`, el("small", { text: btc === null ? "" : "A TICKET LOTTERY" })]);
   }
 }
 

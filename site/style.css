@@ -193,6 +193,11 @@ strong { color: var(--ink); }
 .board-meta .num { font: 700 15px/1.2 var(--mono); overflow-wrap: anywhere; }
 .board-meta .num.late { color: var(--red); }
 .board-meta .num.rotating { color: var(--blue); }
+.vaults { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 8px; padding: 8px 0; border-top: 2px solid var(--line); border-bottom: 2px solid var(--line); }
+.vaults > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vaults dt { font: 7px/1.6 var(--pixel); color: var(--muted); text-transform: uppercase; }
+.vaults dd { margin: 0; font: 700 14px/1.2 var(--mono); overflow-wrap: anywhere; }
+.vaults dd small { display: block; font: 10px/1.4 var(--mono); color: var(--muted); font-weight: 400; }
 .countdown { height: 12px; border: 2px solid var(--line); background: var(--bg); margin-bottom: 12px; }
 .countdown span { display: block; height: 100%; width: 0; background: var(--acid); transition: width .9s linear; }
 .countdown.late span { background: var(--red); }
@@ -269,6 +274,7 @@ table.data td { padding: 7px 8px; border-bottom: 1px solid #1c1e25; white-space:
 table.data tr:last-child td { border-bottom: 0; }
 table.data td small { display: block; color: var(--muted); font-size: 10px; white-space: normal; max-width: 200px; }
 table.data .tag { display: inline-block; font: 8px var(--pixel); padding: 3px 4px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; vertical-align: middle; }
+table.data .tag.strike { color: var(--acid); border-color: var(--acid); }
 table.data a { color: var(--blue); }
 
 /* performance */

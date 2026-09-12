@@ -275,12 +275,55 @@ class LivePlayer:
             record = records.get(row["round_id"])
             if record is None:
                 continue
-            outcome = outcome_from_record(record, price)
+            try:
+                detail = self.api.round(row["round_id"])
+            except Exception:  # the strike tag is decoration; the settlement is in the record
+                detail = None
+            outcome = outcome_from_record(record, price, detail)
             if outcome is None:
                 continue
             self.l.settle(row["round_id"], outcome)
             outcomes.append({"round_id": row["round_id"], **outcome})
+        if outcomes:
+            self.l.put("vault_positions", self.vault_positions())
         return outcomes
+
+    def vault_positions(self):
+        """This wallet's standing in the epoch and 1 BTC vaults, from the public API.
+
+        Tickets are earned by deploying; the API does not publish the formula,
+        so they are read back rather than estimated. Read-only and decorative:
+        a failure leaves the last known value in place.
+        """
+        try:
+            epoch = self.api.user_epoch(str(self.wallet)) or []
+            one_btc = self.api.user_one_btc(str(self.wallet)) or []
+        except Exception:
+            return self.l.get("vault_positions")
+
+        def newest(entries):
+            entries = [e for e in entries if isinstance(e, dict)]
+            return max(entries, key=lambda e: int(e.get("iteration_id") or 0), default=None)
+
+        e = newest(epoch)
+        o = newest(one_btc)
+        return {
+            "epoch": None if e is None else {
+                "iteration": e.get("iteration_id"),
+                "tickets": int(e.get("tickets") or 0),
+                "rank": e.get("rank"),
+                "won": bool(e.get("is_won")),
+                "won_usd": float(e.get("won_combined_usd_amount") or 0),
+            },
+            "one_btc": None if o is None else {
+                "iteration": o.get("iteration_id"),
+                "tickets": int(o.get("tickets") or 0),
+                "won": bool(o.get("is_won")),
+            },
+            "epoch_wins": sum(1 for x in epoch if isinstance(x, dict) and x.get("is_won")),
+            "one_btc_wins": sum(1 for x in one_btc if isinstance(x, dict) and x.get("is_won")),
+            "fetched_at": time.time(),
+        }
 
     def claim(self, usd=True, sats=True):
         miner = self.miner()

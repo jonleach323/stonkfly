@@ -139,8 +139,17 @@ def simulate(amount, mask, round_json, fee_bps, btc_price):
     pot = pot_sats(round_json) + contribution_sats
     winning_total = winning_tile_stake(round_json) + tile_stake
     sats = (tile_stake * pot) // winning_total if won else 0
+    # A Sat Strike round pays its bonus (USDC and BTC from the strike vault)
+    # to the winning tile pro rata, exactly like the pot (verified on round 56305).
+    strike = bool(round_json.get("is_sat_strike"))
+    strike_usd = 0
+    strike_sats = 0
+    if strike and won:
+        strike_usd = (tile_stake * int(round_json.get("strike_bonus_usd") or 0)) // winning_total
+        strike_sats = (tile_stake * int(round_json.get("strike_bonus_btc") or 0)) // winning_total
+        sats += strike_sats
     sats_usd = D(sats) / D(SATS_PER_BTC) * price
-    pnl = D(refund) / D(10**6) + sats_usd - D(amount) / D(10**6)
+    pnl = D(refund) / D(10**6) + D(strike_usd) / D(10**6) + sats_usd - D(amount) / D(10**6)
     return {
         "won": won,
         "winning_tile": winning,
@@ -149,14 +158,21 @@ def simulate(amount, mask, round_json, fee_bps, btc_price):
         "refund_usd": str(D(refund) / D(10**6)),
         "sats": sats,
         "sats_usd": str(sats_usd.quantize(Decimal("0.000001"))),
+        "strike": strike,
+        "strike_usd": str(D(strike_usd) / D(10**6)),
+        "strike_sats": strike_sats,
         "btc_price": format(price, "f"),
         "pnl_usd": str(pnl.quantize(Decimal("0.000001"))),
         "simulated": True,
     }
 
 
-def outcome_from_record(record, btc_price):
-    """Round P&L from an API deployment record (real on-chain settlement)."""
+def outcome_from_record(record, btc_price, round_json=None):
+    """Round P&L from an API deployment record (real on-chain settlement).
+
+    `usd_earned` and `btc_earned` already include any Sat Strike bonus; the
+    round detail, when given, tags the round as a strike.
+    """
     if record.get("settled_at") is None or record.get("is_won") is None:
         return None
     deployed = D(record["deployed_usd_amount"]) / D(10**6)
@@ -177,6 +193,8 @@ def outcome_from_record(record, btc_price):
         "sats": sats,
         "sats_usd": str(sats_usd.quantize(Decimal("0.000001"))),
         "token_usd": str(token_usd),
+        "hashrate": int(record.get("hashrate_earned") or 0),
+        "strike": bool((round_json or {}).get("is_sat_strike")),
         "pnl_usd": str(pnl.quantize(Decimal("0.000001"))),
         "simulated": False,
     }
