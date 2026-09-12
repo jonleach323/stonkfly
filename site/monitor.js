@@ -69,6 +69,15 @@ function hexCenters() {
 }
 const HEX_CENTERS = hexCenters();
 
+/** Canvas-pixel centre of a tile (1..21), for pointing the cursor at it. */
+export function tileCenter(tile) {
+  const entry = HEX_CENTERS[tile - 1];
+  return entry ? { x: entry.x, y: entry.y } : null;
+}
+
+/** The START block in canvas pixels; the cursor goes here after the last tile. */
+export const START_RECT = { x: RAIL_X + 14, y: BOARD_TOP + 122 + 116, w: RAIL_W - 28, h: 44 };
+
 // ---------------------------------------------------------------------------
 // Formatting helpers. Money arrives as decimal strings; keep them as strings
 // until display and never do arithmetic that could imply precision we lack.
@@ -370,11 +379,12 @@ function drawVaults(ctx, board, now) {
   });
 }
 
-function drawBoard(ctx, state, board) {
+function drawBoard(ctx, state, board, view) {
   const stakes = board ? board.tile_stakes.map((t) => num(t && t.stake_usd) || 0) : new Array(TILES).fill(0);
   const miners = board ? board.tile_stakes.map((t) => num(t && t.miners) || 0) : new Array(TILES).fill(0);
   const maxStake = Math.max(0, ...stakes);
-  const chosen = new Set(state && state.neural && Array.isArray(state.neural.tiles) ? state.neural.tiles : []);
+  const chosen = new Set(view && Array.isArray(view.selected) ? view.selected : (state && state.neural && Array.isArray(state.neural.tiles) ? state.neural.tiles : []));
+  const pressing = view && view.pressing != null ? view.pressing : null;
 
   // Last winning tile: the board's newest previous winner, else the state board's.
   const winners = (board && Array.isArray(board.previous_winners) && board.previous_winners.length ? board.previous_winners : null)
@@ -396,9 +406,9 @@ function drawBoard(ctx, state, board) {
     hexPath(ctx, x, y, HEX_R - 2);
     ctx.fillStyle = lerpColor(COLORS.tileLow, COLORS.tileHigh, share);
     ctx.fill();
-    if (isChosen) {
+    if (isChosen || tile === pressing) {
       hexPath(ctx, x, y, HEX_R - 2);
-      ctx.fillStyle = 'rgba(242,94,48,0.16)';
+      ctx.fillStyle = tile === pressing ? 'rgba(242,94,48,0.45)' : 'rgba(242,94,48,0.16)';
       ctx.fill();
     }
     if (isWinner) {
@@ -407,8 +417,8 @@ function drawBoard(ctx, state, board) {
       ctx.fill();
     }
     // Rim: green for the last winner, orange for a pick; both when the pick just won.
-    ctx.lineWidth = isChosen || isWinner ? 3 : 1.5;
-    ctx.strokeStyle = isWinner ? COLORS.success : (isChosen ? COLORS.accent : COLORS.tileRim);
+    ctx.lineWidth = tile === pressing ? 4 : (isChosen || isWinner ? 3 : 1.5);
+    ctx.strokeStyle = isWinner ? COLORS.success : (isChosen || tile === pressing ? COLORS.accent : COLORS.tileRim);
     hexPath(ctx, x, y, HEX_R - 3);
     ctx.stroke();
     if (isWinner && isChosen) {
@@ -443,14 +453,14 @@ function drawBoard(ctx, state, board) {
   });
 }
 
-function drawRail(ctx, state, boardInfo) {
+function drawRail(ctx, state, boardInfo, view) {
   const x = RAIL_X;
   const w = RAIL_W;
   const right = x + w;
   const inner = x + 14;
   const innerRight = right - 14;
   const neural = (state && state.neural) || {};
-  const tiles = Array.isArray(neural.tiles) ? neural.tiles : [];
+  const tiles = view && Array.isArray(view.selected) ? view.selected : (Array.isArray(neural.tiles) ? neural.tiles : []);
   const settings = (state && state.settings) || {};
   const portfolio = (state && state.portfolio) || {};
   const live = state && state.mode === 'live';
@@ -485,10 +495,11 @@ function drawRail(ctx, state, boardInfo) {
 
   // START block: orange like the real button. It is a picture of a button, not one.
   const by = y + 116;
-  const fill = halted ? COLORS.line : COLORS.accent;
-  card(ctx, inner, by, w - 28, 44, fill, null, 6);
-  const label = halted ? 'HALTED' : (live ? 'START · LIVE' : 'START · PAPER');
-  text(ctx, label, inner + (w - 28) / 2, by + 23, 17, halted ? COLORS.muted : '#ffffff', 'center', 'middle', 700);
+  const deployed = !!(view && view.deployed) && !halted;
+  const fill = halted ? COLORS.line : (deployed ? COLORS.raised : COLORS.accent);
+  card(ctx, START_RECT.x, START_RECT.y, START_RECT.w, START_RECT.h, fill, deployed ? COLORS.accent : null, 6);
+  const label = halted ? 'HALTED' : (deployed ? (live ? 'DEPLOYED · LIVE' : 'DEPLOYED · PAPER') : (live ? 'START · LIVE' : 'START · PAPER'));
+  text(ctx, label, START_RECT.x + START_RECT.w / 2, START_RECT.y + 23, 17, halted ? COLORS.muted : (deployed ? COLORS.accent : '#ffffff'), 'center', 'middle', 700);
 
   // Last round result.
   y = by + 68;
@@ -551,8 +562,11 @@ function drawWaiting(ctx, now) {
  * @param {object|null} state the /api/state snapshot (may be null or not ready)
  * @param {object|null} board the /api/board document (may be null or {live:false})
  * @param {number} [now] wall clock in Unix seconds, for the countdown
+ * @param {object} [view] what the fly has pressed so far this observation:
+ *   { selected: number[], pressing: number|null, deployed: boolean }. Without
+ *   it the whole selection shows at once (still frames, the demo).
  */
-export function drawMonitor(ctx, state, board, now = Date.now() / 1000) {
+export function drawMonitor(ctx, state, board, now = Date.now() / 1000, view = null) {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.imageSmoothingEnabled = true;
@@ -563,9 +577,9 @@ export function drawMonitor(ctx, state, board, now = Date.now() / 1000) {
 
   drawHeader(ctx, ready ? state : null, boardInfo.board, now);
   drawVaults(ctx, boardInfo.board, now);
-  drawBoard(ctx, ready ? state : null, boardInfo.board);
+  drawBoard(ctx, ready ? state : null, boardInfo.board, ready ? view : null);
   if (ready) {
-    drawRail(ctx, state, boardInfo);
+    drawRail(ctx, state, boardInfo, view);
     drawFooter(ctx, state);
   } else {
     drawWaiting(ctx, now);

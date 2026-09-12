@@ -7,7 +7,7 @@
 // and it never touches game state.
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
-import { drawMonitor, MONITOR_WIDTH, MONITOR_HEIGHT } from './monitor.js';
+import { drawMonitor, MONITOR_WIDTH, MONITOR_HEIGHT, tileCenter, START_RECT } from './monitor.js';
 
 const INTERNAL_WIDTH = 800;        // render width; the canvas is upscaled with image-rendering: pixelated
 const MAX_INTERNAL_HEIGHT = 1024;
@@ -735,7 +735,14 @@ export function startScene(canvas) {
       b && b.round_id, b && b.fetched_at, b && b.state, b && b.pending_activation,
       Number.isFinite(ends) ? Math.max(0, Math.ceil(ends - now)) : '',
       s.ready ? '' : Math.floor(now * 2) & 1,
+      pressView() ? `${anim.press.selected.join(',')}/${anim.press.pressing}/${anim.press.deployed ? 1 : 0}` : 'all',
     ].join('|');
+  }
+  // What the screen shows of the selection: the presses so far while the
+  // sequence plays, the whole pick on a still frame or before the first sequence.
+  function pressView() {
+    if (!anim.press.started || !anim.running) return null;
+    return { selected: anim.press.selected, pressing: anim.press.pressing, deployed: anim.press.deployed };
   }
   // Repaint and re-upload the 960x540 texture only when its content changed.
   function paintMonitor() {
@@ -743,7 +750,7 @@ export function startScene(canvas) {
     const key = monitorKey(now);
     if (key === lastKey) return;
     try {
-      drawMonitor(screenCtx, latestState, latestBoard, now);
+      drawMonitor(screenCtx, latestState, latestBoard, now, pressView());
       lastKey = key;
       screenTexture.needsUpdate = true;
     } catch (err) {
@@ -875,7 +882,10 @@ export function startScene(canvas) {
   let dragging = false;
 
   const anim = {
-    clickAt: -1, holdUntil: 0, wander: 0,
+    // The fly's cursor: where it is on the screen (canvas pixels) and the
+    // sequence of tiles it is pressing for the current observation.
+    cursor: new THREE.Vector2(START_RECT.x + START_RECT.w / 2, START_RECT.y + START_RECT.h / 2),
+    press: { queue: [], index: -1, phase: 'idle', phaseEnd: 0, t0: 0, dur: 0, from: new THREE.Vector2(), to: new THREE.Vector2(), selected: [], pressing: null, deployed: false, started: false, idleBase: new THREE.Vector2() },
     t: 0,
     burstUntil: 0,       // wing flutter
     shudderUntil: 0,     // aversive twitch
@@ -900,8 +910,83 @@ export function startScene(canvas) {
     }
   }
 
+  // --- pressing the tiles -----------------------------------------------------
+  // On each observation the cursor visits the chosen tiles in order, clicking
+  // each (the tile lights up as it is pressed), then presses START. Between
+  // observations it idles near where it stopped.
+  const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+  function startPresses(tiles, t) {
+    const press = anim.press;
+    press.queue = tiles.filter((n) => Number.isInteger(n) && n >= 1 && n <= 21);
+    press.index = -1;
+    press.selected = [];
+    press.pressing = null;
+    press.deployed = false;
+    press.started = true;
+    press.phase = 'gap';
+    press.phaseEnd = t + 0.5;
+    lastKey = '';
+  }
+  function moveTo(target, t) {
+    const press = anim.press;
+    press.from.copy(anim.cursor);
+    press.to.set(target.x, target.y);
+    press.dur = 0.22 + press.from.distanceTo(press.to) / 1500;
+    press.t0 = t;
+    press.phase = 'move';
+  }
+  function advancePresses(t) {
+    const press = anim.press;
+    if (press.phase === 'idle') {
+      // A slow drift, like a hand resting on the mouse.
+      anim.cursor.set(press.idleBase.x + 14 * Math.sin(t * 0.6), press.idleBase.y + 9 * Math.sin(t * 0.9 + 1));
+      return false;
+    }
+    if (press.phase === 'gap' && t >= press.phaseEnd) {
+      press.index += 1;
+      if (press.index < press.queue.length) moveTo(tileCenter(press.queue[press.index]), t);
+      else if (press.index === press.queue.length && press.queue.length) moveTo({ x: START_RECT.x + START_RECT.w / 2, y: START_RECT.y + START_RECT.h / 2 }, t);
+      else { press.phase = 'idle'; press.idleBase.copy(anim.cursor); }
+      return false;
+    }
+    if (press.phase === 'move') {
+      const p = Math.min(1, (t - press.t0) / press.dur);
+      anim.cursor.lerpVectors(press.from, press.to, ease(p));
+      if (p >= 1) { press.phase = 'hold'; press.phaseEnd = t + 0.09; }
+      return false;
+    }
+    if (press.phase === 'hold' && t >= press.phaseEnd) {
+      press.phase = 'click';
+      press.phaseEnd = t + 0.16;
+      if (press.index < press.queue.length) {
+        press.pressing = press.queue[press.index];
+        press.selected = press.selected.concat(press.pressing);
+      } else {
+        press.deployed = true;
+      }
+      return true; // the screen changes now
+    }
+    if (press.phase === 'click' && t >= press.phaseEnd) {
+      press.pressing = null;
+      press.phase = 'gap';
+      press.phaseEnd = t + (press.index < press.queue.length ? 0.14 : 0.6);
+      return true;
+    }
+    return false;
+  }
+  // Canvas pixels -> a point just in front of the screen plane, in the monitor's frame.
+  function cursorToScreen(px, py, out) {
+    out.set(
+      monitor.screenCenter.x + (px / MONITOR_WIDTH - 0.5) * monitor.screenSize.w,
+      monitor.screenCenter.y + (0.5 - py / MONITOR_HEIGHT) * monitor.screenSize.h,
+      monitor.screenCenter.z + 0.005,
+    );
+    return out;
+  }
+
   function animate(t, dt) {
     anim.t = t;
+    if (advancePresses(t)) paintMonitor();
     skyline.updateRain(dt);
     // Camera sway around home; the user's drag offset is added on top.
     orbit.sway = 0.2 * Math.sin(t * 0.14);
@@ -927,22 +1012,17 @@ export function startScene(canvas) {
     fly.head.rotation.x = 0.06 * Math.sin(t * 0.9);
     fly.group.rotation.z = shudder * 0.6;
 
-    // Mouse: wanders the pad on a slow Lissajous path, with a pause and a
-    // click (dip) on each new observation. The cursor mirrors it on the screen.
-    const clickAge = t - anim.clickAt;
-    const clicking = clickAge >= 0 && clickAge < 0.18;
-    if (t >= anim.holdUntil) anim.wander += dt;
-    const wander = anim.wander;
-    const mx = 0.075 * Math.sin(wander * 0.9) + 0.03 * Math.sin(wander * 2.3 + 1.0);
-    const mz = 0.05 * Math.sin(wander * 0.7 + 0.8) + 0.025 * Math.sin(wander * 1.7);
-    scratch.mouseXY.set(mx, mz);
+    // The cursor is where the sequence put it; the mouse on the pad follows it
+    // (screen x -> pad x, screen down -> pad toward the fly), the click dips.
+    const clicking = anim.press.phase === 'click';
+    const nx = (anim.cursor.x / MONITOR_WIDTH - 0.5) * 2;
+    const ny = (0.5 - anim.cursor.y / MONITOR_HEIGHT) * 2;
+    const mx = nx * 0.1;
+    const mz = -ny * 0.07;
     scratch.local.set(mx, 0, mz).applyAxisAngle(UP, mouse.yaw);
     mouse.group.position.copy(mouse.home).add(scratch.local);
     mouse.group.rotation.y = mouse.yaw + 0.35 * mx;
-    // Screen coordinates: pad x -> screen x, pad z (toward the fly) -> screen down.
-    const sx = clamp(mx / 0.105, -1, 1) * monitor.screenSize.w * 0.46;
-    const sy = -clamp(mz / 0.075, -1, 1) * monitor.screenSize.h * 0.42;
-    monitor.cursor.position.set(monitor.screenCenter.x + sx, monitor.screenCenter.y + sy + 0.02, monitor.screenCenter.z + 0.005);
+    cursorToScreen(anim.cursor.x, anim.cursor.y, monitor.cursor.position);
     monitor.cursor.material.color.setHex(clicking ? PALETTE.acid : 0xffffff);
 
     // Front legs: the left one types on the keyboard, the right one holds the mouse.
@@ -1138,6 +1218,8 @@ export function startScene(canvas) {
       paintMonitor();
     }
 
+    if (!anim.running) kick();
+
     // React to a new observation; decorative only. The flash, flutter and
     // shudder are transients, so they only start while the loop can play them.
     const tick = latestState && latestState.tick != null ? latestState.tick : null;
@@ -1145,10 +1227,8 @@ export function startScene(canvas) {
     if (tick !== null && tick !== anim.lastTick) {
       const first = anim.lastTick === null;
       anim.lastTick = tick;
+      if (anim.running && Array.isArray(neural.tiles)) startPresses(neural.tiles, anim.t);
       if (!first && anim.running) {
-        // The fly clicks: the mouse stops for a moment and the cursor blinks.
-        anim.clickAt = anim.t;
-        anim.holdUntil = anim.t + 0.9;
         if (neural.stimulus === 'reward') {
           anim.burstUntil = anim.t + 1.2;
           anim.flash = 1;
@@ -1165,7 +1245,6 @@ export function startScene(canvas) {
     }
     const running = !!(latestState && latestState.status && latestState.status.running);
     monitor.led.material.emissive.set(running ? PALETTE.acid : PALETTE.red);
-    if (!anim.running) kick();
   }
 
   function setPaused(value) {
