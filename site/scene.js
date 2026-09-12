@@ -1029,7 +1029,8 @@ export function startScene(canvas) {
     const tiles = latestState && latestState.neural && Array.isArray(latestState.neural.tiles) ? latestState.neural.tiles : null;
     if (shown !== null && shown !== anim.press.tick && tiles) {
       const observedAt = Number(latestState.observed_at);
-      const elapsed = Number.isFinite(observedAt) ? Date.now() / 1000 - latestSkew - observedAt : 0;
+      const demo = typeof window !== 'undefined' && !!window.__STONKFLY_DEMO; // a frozen capture: play from the start
+      const elapsed = !demo && Number.isFinite(observedAt) ? Date.now() / 1000 - latestSkew - observedAt : 0;
       startPresses(tiles, t, shown, elapsed);
     }
     // The round the observation was for has ended: whatever is left of the sequence is over.
