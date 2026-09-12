@@ -170,6 +170,7 @@ def main():
 
             verified = verify()
             controller = FlyController(settings)
+        controller.write_atlas(out)
         provenance = {
             "settings": dataclasses.asdict(settings),
             "dataset": verified,

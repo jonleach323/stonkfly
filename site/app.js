@@ -273,6 +273,7 @@ function renderAll() {
   safe(() => renderDecisions(s));
   safe(() => renderPerf(s));
   safe(() => renderSensory(s));
+  safe(() => renderReplay(s));
   safe(renderBoard);
 }
 
@@ -284,6 +285,7 @@ function renderWaiting() {
   setText("stimulus", "—");
   setChip("pick-meta", "OBSERVATION —", "");
   setText("sensory-meta", text);
+  setChip("replay-chip", text, app.state ? "" : "bad");
   if (!app.state) return;
   const e = $("equity");
   if (e) { e.firstElementChild.textContent = "$—"; e.lastElementChild.textContent = ""; }
@@ -664,6 +666,69 @@ function renderSensory(s) {
   setText("sensory-meta", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)} UTC${sha ? ` · SHA ${sha.slice(0, 8)}` : ""}`);
 }
 
+/** The neural replay: fetch the run's atlas once and each observation's binned activity, hand them to brain.js. */
+function b64bytes(text) {
+  const bin = atob(text);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
+function renderReplay(s) {
+  const pub = s.publication || {};
+  setChip("replay-chip", `OBSERVATION #${fmtInt(s.tick)} · ${fmtTime(s.observed_at)} UTC`, "");
+  if (!app.brain) { loadBrain(); return; }
+  const atlasSha = DEMO ? (DEMO.atlas ? "demo" : null) : pub.atlas_sha256 || null;
+  if (atlasSha && atlasSha !== app.atlasSha && !app.atlasLoading) {
+    app.atlasLoading = true;
+    const load = DEMO
+      ? Promise.resolve([b64bytes(DEMO.atlas), DEMO.atlas_meta || null])
+      : Promise.all([
+        fetch(apiUrl(`/api/atlas.bin?v=${encodeURIComponent(atlasSha.slice(0, 16))}`), { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(`atlas ${r.status}`); return r.arrayBuffer(); }),
+        fetch(apiUrl("/api/atlas.json"), { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]);
+    load.then(([buffer, meta]) => {
+      app.atlasSha = atlasSha;
+      safe(() => app.brain.setAtlas(buffer, meta));
+      if (meta && meta.n) setText("replay-note", `${fmtInt(meta.n)} of ${fmtInt(meta.of)} simulated cells at their soma positions, lit by their spikes over ${fmtInt((s.settings && s.settings.neural_ms) || 500)} ms of neural time, replayed 2.5× slower. A model, not a recording.`);
+      if (app.activityPending) { const b = app.activityPending; app.activityPending = null; safe(() => app.brain.setActivity(b)); }
+    }).catch((e) => console.warn("atlas unavailable:", e && e.message ? e.message : e)).finally(() => { app.atlasLoading = false; });
+  }
+  const actSha = DEMO ? (DEMO.activity ? "demo" : null) : pub.activity_sha256 || null;
+  if (actSha && actSha !== app.activitySha && !app.activityLoading) {
+    app.activityLoading = true;
+    const load = DEMO
+      ? Promise.resolve(b64bytes(DEMO.activity))
+      : fetch(apiUrl(`/api/activity.bin?v=${encodeURIComponent(actSha.slice(0, 16))}`), { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(`activity ${r.status}`); return r.arrayBuffer(); });
+    load.then((buffer) => {
+      app.activitySha = actSha;
+      if (app.atlasSha) safe(() => app.brain.setActivity(buffer)); else app.activityPending = buffer;
+    }).catch((e) => console.warn("activity unavailable:", e && e.message ? e.message : e)).finally(() => { app.activityLoading = false; });
+  }
+}
+
+async function loadBrain() {
+  if (app.brain || app.brainLoading || app.brainFailed) return;
+  const canvas = $("brain-canvas");
+  if (!canvas) return;
+  app.brainLoading = true;
+  try {
+    const mod = await import("/brain.js");
+    const view = mod.startBrainView(canvas, { raster: $("raster"), hud: $("replay-rate") });
+    app.brain = view;
+    if (app.paused) safe(() => view.setPaused(true));
+    safe(() => view.setVisible(app.view === "watch" && !document.hidden));
+    if (app.state && app.state.ready) safe(() => renderReplay(app.state));
+  } catch (e) {
+    console.warn("neural replay unavailable:", e && e.message ? e.message : e);
+    app.brainFailed = true;
+    const fb = $("replay-fallback");
+    if (fb) fb.hidden = false;
+  } finally {
+    app.brainLoading = false;
+  }
+}
+
 function renderBoardChip(cb) {
   const b = cb.board;
   if (cb.source === "live") setChip("board-chip", "LIVE BOARD", "ok");
@@ -897,6 +962,7 @@ function setPaused(paused) {
   const btn = $("pause-btn");
   if (btn) { btn.classList.toggle("on", paused); btn.textContent = paused ? "RESUME MOTION" : "PAUSE MOTION"; }
   if (app.scene) safe(() => app.scene.setPaused(paused));
+  if (app.brain) safe(() => app.brain.setPaused(paused));
 }
 
 /* ---------------- routing and tabs ---------------- */
@@ -916,6 +982,7 @@ function route() {
   document.title = view === "how" ? "HOW IT WORKS · SAT RUSH FLY" : "SAT RUSH FLY · a fly connectome plays SatRush";
   if (changed && hash !== "main") window.scrollTo(0, 0);
   if (app.scene) safe(() => app.scene.setVisible(view === "watch" && !document.hidden));
+  if (app.brain) safe(() => app.brain.setVisible(view === "watch" && !document.hidden));
   if (view === "watch") loadScene();
 }
 
@@ -966,6 +1033,7 @@ function init() {
   document.querySelectorAll(".scroll").forEach((box) => box.addEventListener("scroll", () => schedule("overflow", markOverflow, 100), { passive: true }));
   document.addEventListener("visibilitychange", () => {
     if (app.scene) safe(() => app.scene.setVisible(app.view === "watch" && !document.hidden));
+    if (app.brain) safe(() => app.brain.setVisible(app.view === "watch" && !document.hidden));
     if (!document.hidden) { schedule("state", pollState, 0); schedule("board", pollBoard, 0); }
   });
   route();

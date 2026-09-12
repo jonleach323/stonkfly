@@ -12,6 +12,7 @@ from PIL import Image
 
 from .config import D
 from .display import board_frame
+from .neural.atlas import encode_activity
 from .errors import Transient
 from .guard import Veto
 from .reinforcement import reinforcement
@@ -127,6 +128,7 @@ class GameLoop:
         frame = board_frame(board, now)
         self.heartbeat("simulating neurons")
         neural = self.controller.observe(frame, kind)
+        activity = neural.pop("activity", None)  # binned spikes of the atlas subsample; a file, not JSON
         self.l.put("stimulus", "none")
         slot = self.l.get("tick") % 2
         checkpoint = self.out / f"brain-{slot}.npz"
@@ -170,6 +172,11 @@ class GameLoop:
             f.flush()
             os.fsync(f.fileno())
         Image.fromarray(frame).save(self.out / "latest-input.png")
+        if activity is not None:
+            blob = encode_activity(row["tick"], activity, self.s.neural_ms / len(activity))
+            tmp = self.out / "latest-activity.bin.partial"
+            tmp.write_bytes(blob)
+            tmp.replace(self.out / "latest-activity.bin")
         (self.out / "latest.json").write_text(json.dumps(row, indent=2) + "\n")
         self.publish()
         print(

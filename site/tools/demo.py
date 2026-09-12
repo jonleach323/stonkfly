@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 from stonkfly.publish import snapshot  # noqa: E402
 from stonkfly.satrush.api import ENDPOINTS, SatRushApi  # noqa: E402
 
-COPY = ["app.js", "scene.js", "monitor.js", "style.css", "logo.svg", "favicon.svg"]
+COPY = ["app.js", "scene.js", "monitor.js", "brain.js", "style.css", "logo.svg", "favicon.svg"]
 
 
 def build(run, out, network="mainnet", artifact=False, live_board=True):
@@ -48,6 +48,14 @@ def build(run, out, network="mainnet", artifact=False, live_board=True):
     if frame.exists():
         sensory = "data:image/png;base64," + base64.b64encode(frame.read_bytes()).decode()
     demo = {"captured_at": captured_at, "state": state, "board": board, "sensory": sensory}
+    # The neural replay: the run's atlas and the latest observation's binned activity, if the worker wrote them.
+    atlas = Path(run) / "atlas.bin"
+    activity = Path(run) / "latest-activity.bin"
+    if atlas.exists() and activity.exists():
+        demo["atlas"] = base64.b64encode(atlas.read_bytes()).decode()
+        demo["activity"] = base64.b64encode(activity.read_bytes()).decode()
+        meta = Path(run) / "atlas.json"
+        demo["atlas_meta"] = json.loads(meta.read_text()) if meta.exists() else None
     (out / "demo-data.js").write_text("window.__STONKFLY_DEMO = " + json.dumps(demo, allow_nan=False) + ";\n")
     html = (SITE / "index.html").read_text()
     html = re.sub(r'(src|href|content)="/([^"/][^"]*)"', r'\1="\2"', html)

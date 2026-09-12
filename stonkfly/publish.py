@@ -374,6 +374,8 @@ def snapshot(out, now=None):
         "learning_validated": False,
         "publication": {
             "frame_sha256": frame_sha,
+            "activity_sha256": _file_sha(out / "latest-activity.bin"),
+            "atlas_sha256": _file_sha(out / "atlas.bin"),
             "provenance_sha256": meta.get("provenance_sha256"),
             "publish_error": meta.get("publish_error"),
         },
@@ -429,8 +431,15 @@ def audit(out):
     }
 
 
+def _file_sha(path):
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
 def write_files(out):
-    """Write state.json, audit.json and sensory.png under <out>/site for uploads or static hosting."""
+    """Write state.json, audit.json, sensory.png and the neural replay files under <out>/site for uploads or static hosting."""
     out = Path(out)
     target = out / "site"
     target.mkdir(parents=True, exist_ok=True)
@@ -443,12 +452,25 @@ def write_files(out):
     if frame_bytes is not None:
         # Hash the bytes that ship, so the SHA the page shows is the SHA of the frame it fetches.
         state["publication"]["frame_sha256"] = hashlib.sha256(frame_bytes).hexdigest()
+    extras = {}
+    for name, source, content_type in (
+        ("activity.bin", "latest-activity.bin", "application/octet-stream"),
+        ("atlas.bin", "atlas.bin", "application/octet-stream"),
+        ("atlas.json", "atlas.json", "application/json"),
+    ):
+        path = out / source
+        if path.exists():
+            data = path.read_bytes()
+            extras[name] = (data, content_type)
+            if name != "atlas.json":
+                state["publication"][name.replace(".bin", "_sha256")] = hashlib.sha256(data).hexdigest()
     files = {
         "state.json": (json.dumps(state, allow_nan=False).encode(), "application/json"),
         "audit.json": (audit_bytes, "application/json"),
     }
     if frame_bytes is not None:
         files["sensory.png"] = (frame_bytes, "image/png")
+    files.update(extras)
     for name, (data, _) in files.items():
         tmp = target / (name + ".partial")
         tmp.write_bytes(data)
@@ -546,16 +568,17 @@ class BlobPublisher:
         files = write_files(out)
         try:
             # Dependencies first: state.json names the frame and the audit hash, so both must exist before it lands.
-            for name in ("sensory.png", "audit.json", "state.json"):
+            for name in ("sensory.png", "activity.bin", "atlas.bin", "atlas.json", "audit.json", "state.json"):
                 if name not in files:
                     continue
                 data, content_type = files[name]
                 sha = hashlib.sha256(data).hexdigest()
                 if self.uploaded.get(name) == sha:
                     continue
-                if name == "sensory.png":
-                    self.put(f"frames/{sha}.png", data, content_type, max_age=FRAME_MAX_AGE)
-                    self.urls[name] = self.urls.pop(f"frames/{sha}.png")
+                addressed = {"sensory.png": f"frames/{sha}.png", "activity.bin": f"activity/{sha}.bin", "atlas.bin": f"atlas/{sha}.bin"}
+                if name in addressed:
+                    self.put(addressed[name], data, content_type, max_age=FRAME_MAX_AGE)
+                    self.urls[name] = self.urls.pop(addressed[name])
                 else:
                     self.put(name, data, content_type)
                 self.uploaded[name] = sha
