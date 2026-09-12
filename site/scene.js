@@ -187,16 +187,14 @@ function facadeTexture(rand, lit) {
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, 32, 64);
-  ctx.fillStyle = '#0a0c14';
-  for (let x = 0; x < 32; x += 8) ctx.fillRect(x, 0, 3, 64);
   for (let y = 2; y < 64; y += 4) {
     for (let x = 1; x < 32; x += 4) {
       const r = rand();
       if (r < lit) {
         ctx.fillStyle = WINDOW_COLORS[Math.floor(rand() * WINDOW_COLORS.length)];
         ctx.fillRect(x, y, 1, 2);
-      } else if (r < lit + 0.12) {
-        ctx.fillStyle = '#1a1e2c';
+      } else if (r < lit + 0.1) {
+        ctx.fillStyle = '#141826';
         ctx.fillRect(x, y, 1, 2);
       }
     }
@@ -216,9 +214,13 @@ function skyTexture() {
   c.height = 64;
   const ctx = c.getContext('2d');
   const g = ctx.createLinearGradient(0, 0, 0, 64);
+  // The plane spans y -40..100; the glow sits around eye level.
   g.addColorStop(0, '#05060c');
-  g.addColorStop(0.6, '#0e1024');
-  g.addColorStop(1, '#2a1a44');
+  g.addColorStop(0.5, '#141232');
+  g.addColorStop(0.66, '#3a1a52');
+  g.addColorStop(0.76, '#5c265a');
+  g.addColorStop(0.86, '#3a1a44');
+  g.addColorStop(1, '#1a1028');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 4, 64);
   const tex = new THREE.CanvasTexture(c);
@@ -234,42 +236,84 @@ function buildSkyline(scene) {
   const skyMaterial = new THREE.MeshBasicMaterial({ map: skyTexture(), fog: false });
   const skyLeft = new THREE.Mesh(new THREE.PlaneGeometry(260, 140), skyMaterial);
   skyLeft.rotation.y = Math.PI / 2;
-  skyLeft.position.set(-90, 30, 0);
+  skyLeft.position.set(-60, 30, 0);
   group.add(skyLeft);
 
+  const starPositions = [];
+  for (let i = 0; i < 180; i += 1) starPositions.push(-59, 12 + rand() * 50, -80 + rand() * 160);
+  group.add(new THREE.Points(
+    new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3)),
+    new THREE.PointsMaterial({ color: 0xc9d4ff, size: 0.35, fog: false }),
+  ));
+  const moon = new THREE.Mesh(new THREE.IcosahedronGeometry(2.6, 1), new THREE.MeshBasicMaterial({ color: 0xe9e4d2, fog: false }));
+  moon.position.set(-57, 22, 12);
+  group.add(moon);
+
   const textures = [facadeTexture(rand, 0.07), facadeTexture(rand, 0.11), facadeTexture(rand, 0.05), facadeTexture(rand, 0.09)];
-  const ground = -28;
+  const ground = -11; // the room is high up: the near rooftops sit below eye level, the far towers rise past it
   // Two rings of towers around the platform's left and back edges; the outer
   // ring is taller and darker. Each entry: distance band from the platform.
   const rings = [
-    { near: 5, far: 8, tint: 0x28304c, glow: 1.0, wMin: 2.0, wMax: 4.5, hMin: 36, hMax: 52, gap: 1.0 },
-    { near: 10, far: 15, tint: 0x1e2440, glow: 0.85, wMin: 3.0, wMax: 6.5, hMin: 44, hMax: 66, gap: 1.4 },
-    { near: 17, far: 25, tint: 0x161a30, glow: 0.7, wMin: 4.0, wMax: 9, hMin: 56, hMax: 90, gap: 1.8 },
+    { near: 6, far: 9, tint: 0x2a3050, glow: 1.0, wMin: 1.6, wMax: 3.4, hMin: 7, hMax: 13, gap: 2.2 },
+    { near: 13, far: 19, tint: 0x1f2442, glow: 0.8, wMin: 2.4, wMax: 5.5, hMin: 10, hMax: 20, gap: 2.4 },
+    { near: 24, far: 34, tint: 0x171a32, glow: 0.6, wMin: 3.5, wMax: 8, hMin: 13, hMax: 27, gap: 2.8 },
   ];
   const towers = [];
+  // Facades are unlit: the room's lights must not reach the city and vice
+  // versa, so each tower is a flat-shaded box (a shade per face, baked into
+  // vertex colours) with its windows drawn on top additively.
+  const FACE_SHADE = [1.0, 0.7, 1.25, 0.5, 0.8, 0.7]; // +x (toward the room), -x, top, bottom, +z (toward the camera), -z
+  function facadeGeometry(w, h, d) {
+    const geometry = new THREE.BoxGeometry(w, h, d);
+    const colors = new Float32Array(geometry.attributes.position.count * 3);
+    for (let face = 0; face < 6; face += 1) {
+      for (let v = face * 4; v < face * 4 + 4; v += 1) {
+        colors[v * 3] = FACE_SHADE[face];
+        colors[v * 3 + 1] = FACE_SHADE[face];
+        colors[v * 3 + 2] = FACE_SHADE[face];
+      }
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.clearGroups();
+    return geometry;
+  }
+  const capMaterial = {};
   function tower(ring, x, z, w, d) {
     const h = ring.hMin + rand() * (ring.hMax - ring.hMin);
+    const shade = new THREE.Color(ring.tint).multiplyScalar(0.8 + rand() * 0.45);
+    const body = new THREE.Mesh(facadeGeometry(w, h, d), new THREE.MeshBasicMaterial({ color: shade, vertexColors: true, fog: false }));
+    body.position.set(x, ground + h / 2, z);
+    group.add(body);
     const tex = textures[Math.floor(rand() * textures.length)].clone();
     tex.repeat.set(Math.max(1, Math.round(w / 1.6)), Math.max(1, Math.round(h / 3.2)));
     tex.needsUpdate = true;
-    // Slight per-tower shade so neighbouring slabs separate.
-    const shade = new THREE.Color(ring.tint).multiplyScalar(0.8 + rand() * 0.45);
-    const material = new THREE.MeshStandardMaterial({
-      color: shade, map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: ring.glow,
-      roughness: 0.95, metalness: 0.05, fog: false,
-    });
-    const mesh = box(w, h, d, material, x, ground + h / 2, z);
-    group.add(mesh);
+    const windows = new THREE.Mesh(
+      new THREE.BoxGeometry(w + 0.02, h, d + 0.02),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: ring.glow, fog: false }),
+    );
+    windows.position.copy(body.position);
+    group.add(windows);
     const r = rand();
-    if (r < 0.35) {
-      group.add(box(w * (0.4 + rand() * 0.3), h * 0.12, d * 0.6, material, x, ground + h + h * 0.06, z)); // setback
-    } else if (r < 0.5) {
-      const mast = 1.5 + rand() * 3;
-      group.add(box(0.12, mast, 0.12, standard(0x161a26, { fog: false }), x, ground + h + mast / 2, z));
-      group.add(emissiveBox(0.22, 0.22, 0.22, 0xff4d7d, 3, x, ground + h + mast, z));
+    if (r < 0.3) {
+      const w2 = w * (0.4 + rand() * 0.3);
+      const h2 = h * 0.12;
+      const setback = new THREE.Mesh(facadeGeometry(w2, h2, d * 0.6), body.material);
+      setback.position.set(x, ground + h + h2 / 2, z);
+      group.add(setback);
+    } else if (r < 0.45) {
+      const capH = 0.8 + rand() * 1.6;
+      capMaterial[ring.tint] = capMaterial[ring.tint] || new THREE.MeshBasicMaterial({ color: new THREE.Color(ring.tint).multiplyScalar(0.9), fog: false });
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(Math.min(w, d) * 0.62, capH, 4), capMaterial[ring.tint]);
+      cap.position.set(x, ground + h + capH / 2, z);
+      cap.rotation.y = Math.PI / 4;
+      group.add(cap);
+    } else if (r < 0.58) {
+      const mast = 0.8 + rand() * 2;
+      group.add(box(0.1, mast, 0.1, new THREE.MeshBasicMaterial({ color: 0x161a26, fog: false }), x, ground + h + mast / 2, z));
+      group.add(emissiveBox(0.16, 0.16, 0.16, 0xff4d7d, 3, x, ground + h + mast, z));
     }
-    towers.push(mesh);
-    return mesh;
+    towers.push(body);
+    return body;
   }
   rings.forEach((ring) => {
     // Lines of towers beyond the left wall (x = -3.2), running from behind the desk to well in front of it.
@@ -291,7 +335,7 @@ function buildSkyline(scene) {
   for (let i = 0; i < RAIN; i += 1) {
     const x = -8 - rand() * 18;
     const z = -14 + rand() * 30;
-    const drop = { x, z, y: -4 + rand() * 20, len: 0.25 + rand() * 0.7, speed: 1.2 + rand() * 2.4 };
+    const drop = { x, z, y: -4 + rand() * 20, len: 0.2 + rand() * 0.5, speed: 1.0 + rand() * 2.0 };
     drops.push(drop);
     const c = palette[Math.floor(rand() * palette.length)];
     for (let k = 0; k < 2; k += 1) {
@@ -303,14 +347,14 @@ function buildSkyline(scene) {
   const rainGeometry = new THREE.BufferGeometry();
   rainGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   rainGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const rain = new THREE.LineSegments(rainGeometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, fog: false }));
+  const rain = new THREE.LineSegments(rainGeometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.4, fog: false }));
   rain.frustumCulled = false;
   group.add(rain);
   function updateRain(dt) {
     for (let i = 0; i < RAIN; i += 1) {
       const d = drops[i];
       d.y -= d.speed * dt;
-      if (d.y < -6) d.y = 16 + Math.random() * 4;
+      if (d.y < -6) d.y = 14 + Math.random() * 4;
       positions[i * 6] = d.x;
       positions[i * 6 + 1] = d.y;
       positions[i * 6 + 2] = d.z;
@@ -321,9 +365,6 @@ function buildSkyline(scene) {
     rainGeometry.attributes.position.needsUpdate = true;
   }
   updateRain(0);
-
-  // A dim city glow so unlit facades are not pure black.
-  group.add(new THREE.HemisphereLight(0x4a4080, 0x201430, 1.6));
 
   scene.add(group);
   return { group, towers, updateRain };
@@ -342,35 +383,19 @@ function buildRoom(scene) {
   back.position.set(0, 2.5, -1.9);
   scene.add(back);
 
-  // Left wall (x = -3.2, z -3..5) that is mostly window (z -2.85..2.6, y 0.7..4.3) onto the city.
-  const W = { x: -3.2, near: -2.85, far: 2.6, bottom: 0.7, top: 4.3 };
-  const wallPiece = (w, h, z, y) => {
-    const piece = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMaterial);
-    piece.rotation.y = Math.PI / 2;
-    piece.position.set(W.x, y, z);
-    scene.add(piece);
-  };
-  wallPiece(8, W.bottom, 1, W.bottom / 2);
-  wallPiece(8, 5 - W.top, 1, (5 + W.top) / 2);
-  wallPiece(W.near + 3, W.top - W.bottom, (W.near - 3) / 2, (W.top + W.bottom) / 2);
-  wallPiece(5 - W.far, W.top - W.bottom, (W.far + 5) / 2, (W.top + W.bottom) / 2);
+  // The whole left wall (x = -3.2, z -3..5, floor to ceiling) is glass onto the city:
+  // one pane with slim posts only at the corners.
   const frame = standard(0x14161d, { roughness: 0.6, metalness: 0.3 });
-  const winW = W.far - W.near;
-  const winH = W.top - W.bottom;
-  const cz = (W.near + W.far) / 2;
-  const cy = (W.top + W.bottom) / 2;
-  scene.add(box(0.12, 0.08, winW + 0.12, frame, W.x + 0.02, W.top + 0.02, cz));
-  scene.add(box(0.16, 0.08, winW + 0.12, frame, W.x + 0.02, W.bottom - 0.02, cz)); // sill
-  scene.add(box(0.12, winH, 0.08, frame, W.x + 0.02, cy, W.near - 0.02));
-  scene.add(box(0.12, winH, 0.08, frame, W.x + 0.02, cy, W.far + 0.02));
-  scene.add(box(0.08, winH, 0.05, frame, W.x + 0.02, cy, -1.0)); // mullions
-  scene.add(box(0.08, winH, 0.05, frame, W.x + 0.02, cy, 0.8));
+  scene.add(box(0.1, 5, 0.1, frame, -3.2, 2.5, -3));
+  scene.add(box(0.1, 5, 0.1, frame, -3.2, 2.5, 5));
+  scene.add(box(0.14, 0.06, 8, frame, -3.2, 0.03, 1)); // floor track
+  scene.add(box(0.14, 0.06, 8, frame, -3.2, 4.97, 1)); // ceiling track
   const glass = new THREE.Mesh(
-    new THREE.PlaneGeometry(winW, winH),
-    new THREE.MeshStandardMaterial({ color: 0x9db4ff, transparent: true, opacity: 0.06, roughness: 0.1, metalness: 0.5, depthWrite: false }),
+    new THREE.PlaneGeometry(8, 5),
+    new THREE.MeshStandardMaterial({ color: 0x9db4ff, transparent: true, opacity: 0.05, roughness: 0.1, metalness: 0.5, depthWrite: false }),
   );
   glass.rotation.y = Math.PI / 2;
-  glass.position.set(W.x + 0.01, cy, cz);
+  glass.position.set(-3.2, 2.5, 1);
   scene.add(glass);
 
   const skyline = buildSkyline(scene);
@@ -732,7 +757,7 @@ export function startScene(canvas) {
   scene.background = new THREE.Color(PALETTE.bg);
   scene.fog = new THREE.Fog(PALETTE.bg, 4.5, 11);
 
-  const camera = new THREE.PerspectiveCamera(32, DEFAULT_ASPECT, 0.1, 40);
+  const camera = new THREE.PerspectiveCamera(32, DEFAULT_ASPECT, 0.1, 160);
 
   scene.add(new THREE.HemisphereLight(0x3d55a8, 0x07070c, 0.55));
   const key = new THREE.DirectionalLight(0x8ab0ff, 1.9);
