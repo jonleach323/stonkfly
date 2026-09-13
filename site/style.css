@@ -180,6 +180,7 @@ strong { color: var(--ink); }
 .board-meta .num { font: 700 15px/1.2 var(--mono); overflow-wrap: anywhere; }
 .board-meta .num.late { color: var(--red); }
 .board-meta .num.rotating { color: var(--blue); }
+.holdings-note { margin-top: -6px; }
 .vaults { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 8px; padding: 8px 0; border-top: 2px solid var(--line); border-bottom: 2px solid var(--line); }
 .vaults > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .vaults dt { font: 7px/1.6 var(--pixel); color: var(--muted); text-transform: uppercase; }
