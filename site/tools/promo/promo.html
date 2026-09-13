@@ -2,33 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Sat Rush Fly promo frame</title>
+<title>Sat Rush Fly clip frame</title>
 <link rel="stylesheet" href="fonts.css">
 <style>
   html, body { margin: 0; width: 1280px; height: 720px; overflow: hidden; background: #060709; }
   #output { position: absolute; inset: 0; width: 1280px; height: 720px; display: block; }
-  .overlay { position: absolute; inset: 0; pointer-events: none; font-family: "Press Start 2P", monospace; color: #f3f4ed; }
-  .brand { position: absolute; left: 44px; top: 40px; font-size: 22px; letter-spacing: 1px; text-shadow: 3px 3px 0 #000; opacity: 0; }
-  .brand small { display: block; margin-top: 14px; font-size: 11px; color: #bdff32; }
-  .line { position: absolute; left: 44px; bottom: 44px; font-size: 13px; line-height: 2; text-shadow: 3px 3px 0 #000; opacity: 0; }
-  .line b { color: #bdff32; font-weight: normal; }
-  .url { position: absolute; right: 44px; bottom: 44px; font-family: "Space Mono", monospace; font-size: 18px; font-weight: 700; color: #f3f4ed; text-shadow: 2px 2px 0 #000; opacity: 0; }
-  .card { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; background: rgba(6, 7, 9, 0.86); opacity: 0; }
-  .card h1 { font-size: 30px; margin: 0 0 26px; text-shadow: 4px 4px 0 #000; }
-  .card p { font-family: "Space Mono", monospace; font-size: 22px; margin: 0; color: #bdff32; }
-  .card p.sub { font-size: 14px; color: #989aaa; margin-top: 18px; }
-  .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%); }
 </style>
 </head>
 <body>
 <canvas id="output"></canvas>
-<div class="overlay">
-  <div class="vignette"></div>
-  <div class="brand" id="brand">SAT RUSH FLY<small>A FRUIT FLY CONNECTOME PLAYS SATRUSH</small></div>
-  <div class="line" id="line">166,700 NEURONS · 21 TILES · ONE DEPLOY PER ROUND<br><b>THE FLY PICKS. THE MONEY IS REAL.</b></div>
-  <div class="url" id="url">fly.killerwhalelabs.com</div>
-  <div class="card" id="card"><div><h1>WATCH IT PLAY LIVE</h1><p>fly.killerwhalelabs.com</p><p class="sub">NOT AFFILIATED WITH SATRUSH · IT WILL PROBABLY LOSE</p></div></div>
-</div>
 <script src="demo-data.js"></script>
 <script type="module">
   import { startScene } from './scene.js';

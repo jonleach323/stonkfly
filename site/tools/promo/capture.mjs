@@ -1,5 +1,5 @@
-// Render the fly scene frame by frame into PNGs with a virtual clock, then encode
-// an MP4 for social posts. Needs the global playwright package and an ffmpeg
+// Render the fly scene, nothing else, frame by frame into PNGs with a virtual
+// clock, then encode an MP4 for social posts. Needs the global playwright package and an ffmpeg
 // with libx264 (FFMPEG env or `pip install imageio-ffmpeg`).
 //
 //   python site/tools/demo.py --run runs/paper --out /tmp/promo --no-live-board
@@ -74,8 +74,7 @@ await page.goto(`http://127.0.0.1:${port}/promo.html`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 });
 await page.evaluate(() => window.__step(16));
 
-// Camera: a slow drag from the left of home to the right, never released, so the
-// scene's own sway rides on top. Overlays fade on a schedule.
+// Camera: a slow drag, never released, so the scene's own sway rides on top.
 // Camera drag in canvas pixels, from and to, over the clip. Positive turns the camera
 // toward the window wall and shows the monitor's side; negative goes behind the fly and faces the screen.
 const DRAG_FROM = Number(process.env.PROMO_DRAG_FROM ?? 25);
@@ -89,25 +88,11 @@ await page.mouse.down();
 await page.mouse.move(startX + DRAG_FROM, box.y + box.height * 0.5);
 await page.evaluate(() => window.__step(16));
 function ease(u) { return u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2; }
-function fade(t, from, to, out = Infinity, outLen = 0.6) {
-  if (t < from) return 0;
-  if (t < to) return (t - from) / (to - from);
-  if (t < out) return 1;
-  return Math.max(0, 1 - (t - out) / outLen);
-}
 for (let i = 0; i < total; i++) {
   const t = i / FPS;
   const u = Math.min(1, Math.max(0, (t - 1.0) / (SECONDS - 5)));
   await page.mouse.move(startX + DRAG_FROM + (DRAG_TO - DRAG_FROM) * ease(u), box.y + box.height * 0.5);
-  await page.evaluate(({ t, S }) => {
-    const set = (id, v) => { document.getElementById(id).style.opacity = String(v); };
-    const f = (from, to, out, len) => (t < from ? 0 : t < to ? (t - from) / (to - from) : out !== undefined && t >= out ? Math.max(0, 1 - (t - out) / len) : 1);
-    set('brand', f(0.6, 1.6, S - 3.2, 0.5));
-    set('line', f(3.0, 4.0, S - 3.2, 0.5));
-    set('url', f(1.2, 2.2, S - 3.2, 0.5));
-    set('card', f(S - 3.0, S - 2.3));
-    window.__step(1000 / 30);
-  }, { t, S: SECONDS });
+  await page.evaluate(() => window.__step(1000 / 30));
   await page.screenshot({ path: path.join(frames, `f${String(i).padStart(4, '0')}.png`), clip: { x: 0, y: 0, width: W, height: H }, animations: 'disabled', caret: 'hide' });
   if (i % 60 === 0) console.log(`frame ${i}/${total}`);
 }
