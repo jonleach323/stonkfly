@@ -697,8 +697,10 @@ const POST_FRAGMENT = /* glsl */ `
  * Start the avatar on a canvas. Throws when WebGL is unavailable so the page
  * can show its fallback.
  */
-export function startScene(canvas) {
+export function startScene(canvas, options = {}) {
   if (!canvas || typeof canvas.getContext !== 'function') throw new Error('startScene needs a canvas element');
+  // internalWidth: render width override for captures (a video frame); the page keeps the pixel look.
+  const internalWidth = Math.min(1920, Math.max(160, Number(options.internalWidth) || INTERNAL_WIDTH));
 
   let renderer;
   try {
@@ -865,7 +867,7 @@ export function startScene(canvas) {
       height = 0;
       return false;
     }
-    const w = Math.min(INTERNAL_WIDTH, Math.max(160, cssW));
+    const w = Math.min(internalWidth, Math.max(160, cssW));
     const h = Math.min(MAX_INTERNAL_HEIGHT, Math.max(96, Math.round(w * cssH / cssW)));
     if (w !== width || h !== height) {
       width = w;
