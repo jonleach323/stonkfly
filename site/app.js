@@ -292,7 +292,7 @@ function renderWaiting() {
 /** The worker started over (a not-ready snapshot after a ready one): drop every number from the old one. */
 function resetReady() {
   app.roundsKey = ""; app.decisionsKey = ""; app.chartKey = ""; app.frameSha = null;
-  for (const id of ["pnl", "in-play", "h-cash", "h-inplay", "h-sats", "h-rounds", "h-hit", "h-strikes", "h-tickets", "s-cash", "s-fees", "s-refunds", "s-sats", "s-best", "perf-chip", "b-spikes", "b-edges", "b-time"]) setText(id, "—");
+  for (const id of ["pnl", "in-play", "h-cash", "h-inplay", "h-sats", "h-rounds", "h-hit", "h-strikes", "h-tickets", "h-hashrate", "s-cash", "s-fees", "s-refunds", "s-sats", "s-best", "perf-chip", "b-spikes", "b-edges", "b-time"]) setText(id, "—");
   for (const id of ["pnl", "s-best"]) { const n = $(id); if (n) n.className = "num"; }
   setChip("perf-chip", "—", "");
   setText("value-unit", "USDC");
@@ -490,6 +490,13 @@ function renderHoldings(s) {
       replaceChildren(tickets, [line, el("small", { text: wins.join(" · ") || "NO VAULT WINS" })]);
     }
   }
+  // Hashrate: what the fly's settled deploys mined, as the API reports it per round. Paper deploys mine nothing.
+  const hashrate = $("h-hashrate");
+  if (hashrate) {
+    const hr = num(p.hashrate);
+    if (s.mode !== "live") replaceChildren(hashrate, ["—", el("small", { text: "NO WALLET" })]);
+    else replaceChildren(hashrate, [`${fmtInt(hr ?? 0)} HR`, el("small", { text: `${fmtInt(p.rounds_played ?? 0)} ROUNDS` })]);
+  }
 }
 
 function renderRounds(s) {
@@ -523,6 +530,8 @@ function renderRounds(s) {
     if (token) pnlCell.append(el("small", { text: `incl. ${fmtMoney(token, { digits: 4 })} RUSH` }));
     const strikeUsd = num(r.strike_usd);
     if (strikeUsd) pnlCell.append(el("small", { text: `incl. ${fmtMoney(strikeUsd)} strike bonus` }));
+    const hr = num(r.hashrate);
+    if (hr) pnlCell.append(el("small", { text: `+${fmtInt(hr)} HR` }));
     return el("tr", {}, [
       el("td", {}, [`#${r.round_id ?? "—"}`, el("small", { text: fmtTime(r.time) })]),
       resultCell,
