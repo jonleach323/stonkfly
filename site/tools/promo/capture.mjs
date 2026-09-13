@@ -1,5 +1,5 @@
-// Render the fly scene with the title mark and the neural replay panel, frame
-// by frame into PNGs with a virtual clock, then encode an MP4 for social posts. Needs the global playwright package and an ffmpeg
+// Render the fly scene with the title mark, frame by frame into PNGs with a
+// virtual clock, then encode an MP4 for social posts. Needs the global playwright package and an ffmpeg
 // with libx264 (FFMPEG env or `pip install imageio-ffmpeg`).
 //
 //   python site/tools/demo.py --run runs/paper --out /tmp/promo --no-live-board
@@ -92,7 +92,7 @@ for (let i = 0; i < total; i++) {
   const t = i / FPS;
   const u = Math.min(1, Math.max(0, (t - 1.0) / (SECONDS - 5)));
   await page.mouse.move(startX + DRAG_FROM + (DRAG_TO - DRAG_FROM) * ease(u), box.y + box.height * 0.5);
-  await page.evaluate((t) => { if (window.__overlay) window.__overlay(t); window.__step(1000 / 30); }, t);
+  await page.evaluate(() => window.__step(1000 / 30));
   await page.screenshot({ path: path.join(frames, `f${String(i).padStart(4, '0')}.png`), clip: { x: 0, y: 0, width: W, height: H }, animations: 'disabled', caret: 'hide' });
   if (i % 60 === 0) console.log(`frame ${i}/${total}`);
 }
