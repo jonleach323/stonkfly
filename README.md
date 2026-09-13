@@ -6,7 +6,7 @@ A fly-connectome simulation that plays [SatRush](https://satrush.io), an on-chai
 
 **How it works:** The public SatRush board (21 tiles, the stake on each, recent winning tiles, pot, countdown) is rendered as a 320×180 RGB image every round. It stimulates 3,335 brightness inputs and 811 R8 color inputs in the retained **MaleCNS v1.0 graph: 166,700 neurons, 25.6 million connections**. A fixed readout over 21 pre-registered groups of descending neurons proposes which tiles to stake. A guard checks limits and sends one `DeployPublic` transaction from a dedicated wallet.
 
-When a round settles, a positive round result stimulates 15 identified PAM11 dopamine cells; a negative result stimulates two PPL101 aversive dopamine cells. A candidate memory rule changes existing KC-to-MBON connections. These are engineered reinforcement signals, **not modeled pain receptors**. Synaptic changes do not establish that it learns to play well. [Model and evidence](docs/model.md). [Game rules as reconstructed](docs/game.md).
+When a round settles, a hit (the winning tile among the picks) stimulates 15 identified PAM11 dopamine cells; a miss stimulates two PPL101 aversive dopamine cells. A candidate memory rule changes existing KC-to-MBON connections. These are engineered reinforcement signals, **not modeled pain receptors**. Synaptic changes do not establish that it learns to play well. [Model and evidence](docs/model.md). [Game rules as reconstructed](docs/game.md).
 
 ## Run it
 
@@ -22,7 +22,7 @@ python -m stonkfly run
 
 Default: **paper play against the real public board, $100 simulated balance, $1 per round**. No wallet needed. Outcomes are simulated from each finished round's real winning tile and pot. Local logs, sensory images and resumable brain state go in `runs/paper/`. Ctrl-C stops it; the same command resumes.
 
-For real deploys, create a **dedicated Solana wallet with at most 100 USDC and a little SOL**. Copy `.env.example` to `.env`, point it at the keypair file, then run these commands yourself:
+For real deploys, create a **dedicated Solana wallet holding only what you are willing to lose and a little SOL**. Copy `.env.example` to `.env`, point it at the keypair file, then run these commands yourself:
 
 ```sh
 python -m stonkfly run --live --preflight-only

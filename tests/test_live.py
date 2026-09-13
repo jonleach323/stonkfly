@@ -98,14 +98,14 @@ def plan(round_id=1000):
     return {"round_id": round_id, "tiles": [4], "mask": 8, "amount": 1_000_000, "stake_usd": "1"}
 
 
-def test_preflight_records_wallet_and_caps(live):
+def test_preflight_records_wallet_and_start(live):
     player, chain, ledger, keypair = live
     info = player.preflight()
     assert info["usdc"] == 50 and ledger.get("wallet") == str(keypair.pubkey())
     assert ledger.get("initial_cash") == "50"
     chain.accounts[str(p.ata(keypair.pubkey(), USDC))] = token_account(150_000_000)
-    with pytest.raises(RuntimeError):
-        player.preflight()
+    player.preflight()  # a later balance never re-anchors the start
+    assert ledger.get("initial_cash") == "50"
 
 
 def test_deploy_signs_one_instruction_and_confirms(live):
@@ -218,3 +218,18 @@ def test_keygen_writes_a_private_file_once(tmp_path):
     assert len(json.loads(path.read_text())) == 64
     with pytest.raises(SystemExit):
         keygen_file(path)
+
+
+def test_preflight_accepts_any_wallet_balance(tmp_path):
+    """No funding cap: the wallet plays with what it holds; the loss stop is the brake."""
+    keypair = Keypair()
+    chain = FakeChain(keypair, usdc=1_000_370_000)
+    settings = Settings()
+    ledger = Ledger(tmp_path / "ledger.sqlite", settings, "live")
+    api = FixtureApi(period=60.0, clock=lambda: 5.0)
+    api.config = lambda: {**FixtureApi.config(api), "usd_mint": str(USDC), "btc_mint": str(BTC)}
+    api.user_deployments = lambda wallet, limit=10: []
+    player = LivePlayer(settings, ledger, api, Rpc("fake", post=chain, sleep=lambda s: None), keypair)
+    player.preflight()
+    assert ledger.get("initial_cash") == "1000.37"
+    ledger.close()

@@ -42,6 +42,23 @@ class Ledger:
         elif self.get("settings") != settings.signature() or self.get("mode") != mode:
             raise RuntimeError("Run settings/mode mismatch; use a separate run directory")
 
+    @staticmethod
+    def never_played(path):
+        """True when the ledger at path holds no round and no tick: nothing
+        financial happened in it, so archiving it loses no state."""
+        path = Path(path)
+        if not path.is_file():
+            return True
+        db = sqlite3.connect(path)
+        try:
+            tick = db.execute("SELECT value FROM meta WHERE key='tick'").fetchone()
+            rows = db.execute("SELECT count(*) FROM deployments").fetchone()[0]
+        except sqlite3.OperationalError:
+            return False
+        finally:
+            db.close()
+        return rows == 0 and (tick is None or json.loads(tick[0]) == 0)
+
     @contextlib.contextmanager
     def transaction(self):
         self.db.execute("BEGIN IMMEDIATE")

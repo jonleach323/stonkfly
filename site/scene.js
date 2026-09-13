@@ -697,8 +697,10 @@ const POST_FRAGMENT = /* glsl */ `
  * Start the avatar on a canvas. Throws when WebGL is unavailable so the page
  * can show its fallback.
  */
-export function startScene(canvas) {
+export function startScene(canvas, options = {}) {
   if (!canvas || typeof canvas.getContext !== 'function') throw new Error('startScene needs a canvas element');
+  // internalWidth: render width override for captures (a video frame); the page keeps the pixel look.
+  const internalWidth = Math.min(1920, Math.max(160, Number(options.internalWidth) || INTERNAL_WIDTH));
 
   let renderer;
   try {
@@ -865,7 +867,7 @@ export function startScene(canvas) {
       height = 0;
       return false;
     }
-    const w = Math.min(INTERNAL_WIDTH, Math.max(160, cssW));
+    const w = Math.min(internalWidth, Math.max(160, cssW));
     const h = Math.min(MAX_INTERNAL_HEIGHT, Math.max(96, Math.round(w * cssH / cssW)));
     if (w !== width || h !== height) {
       width = w;
@@ -929,7 +931,11 @@ export function startScene(canvas) {
   // each (the tile lights up as it is pressed), then presses START. Between
   // observations it idles near where it stopped.
   const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
-  function startPresses(tiles, t, tick) {
+  // `elapsed`: seconds since the observation happened on the worker. The
+  // presses are re-enacted from that moment, so a page opened mid-round joins
+  // the sequence where it really is instead of starting over, and an
+  // observation older than the sequence shows its end state at once.
+  function startPresses(tiles, t, tick, elapsed = 0) {
     const press = anim.press;
     press.tick = tick;
     press.queue = tiles.filter((n) => Number.isInteger(n) && n >= 1 && n <= 21);
@@ -939,7 +945,27 @@ export function startScene(canvas) {
     press.deployed = false;
     press.started = true;
     press.phase = 'gap';
-    press.phaseEnd = t + 0.8;
+    const t0 = t - Math.max(0, elapsed);
+    press.phaseEnd = t0 + 0.8;
+    if (elapsed > 0) {
+      // Fast-forward through the part that already happened.
+      const limit = 4 + press.queue.length * 3;
+      if (elapsed >= limit) finishPresses();
+      else for (let v = t0; v < t; v += 1 / 30) advancePresses(v);
+    }
+    lastKey = '';
+  }
+
+  // Jump to the end of the sequence: every tile pressed, START pressed, cursor resting there.
+  function finishPresses() {
+    const press = anim.press;
+    press.selected = press.queue.slice();
+    press.pressing = null;
+    press.deployed = press.queue.length > 0;
+    press.index = press.queue.length + 1;
+    press.phase = 'idle';
+    anim.cursor.set(START_RECT.x + START_RECT.w / 2, START_RECT.y + START_RECT.h / 2);
+    press.idleBase.copy(anim.cursor);
     lastKey = '';
   }
   function moveTo(target, t) {
@@ -1003,7 +1029,16 @@ export function startScene(canvas) {
     anim.t = t;
     const shown = latestState && latestState.tick != null ? latestState.tick : null;
     const tiles = latestState && latestState.neural && Array.isArray(latestState.neural.tiles) ? latestState.neural.tiles : null;
-    if (shown !== null && shown !== anim.press.tick && tiles) startPresses(tiles, t, shown);
+    if (shown !== null && shown !== anim.press.tick && tiles) {
+      const observedAt = Number(latestState.observed_at);
+      const demo = typeof window !== 'undefined' && !!window.__STONKFLY_DEMO; // a frozen capture: play from the start
+      const elapsed = !demo && Number.isFinite(observedAt) ? Date.now() / 1000 - latestSkew - observedAt : 0;
+      startPresses(tiles, t, shown, elapsed);
+    }
+    // The round the observation was for has ended: whatever is left of the sequence is over.
+    const observedRound = latestState && latestState.board ? Number(latestState.board.round_id) : NaN;
+    const liveRound = latestBoard && latestBoard.live !== false ? Number(latestBoard.round_id) : NaN;
+    if (anim.press.phase !== 'idle' && Number.isFinite(observedRound) && Number.isFinite(liveRound) && liveRound > observedRound) finishPresses();
     if (advancePresses(t)) paintMonitor();
     skyline.updateRain(dt);
     // Camera sway around home; the user's drag offset is added on top.

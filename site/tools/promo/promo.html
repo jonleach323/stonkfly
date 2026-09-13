@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sat Rush Fly clip frame</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+  html, body { margin: 0; width: 1280px; height: 720px; overflow: hidden; background: #060709; }
+  #output { position: absolute; inset: 0; width: 1280px; height: 720px; display: block; }
+</style>
+</head>
+<body>
+<canvas id="output"></canvas>
+<script src="demo-data.js"></script>
+<script type="module">
+  import { startScene } from './scene.js';
+  const demo = window.__STONKFLY_DEMO;
+  const canvas = document.getElementById('output');
+  const scene = startScene(canvas, { internalWidth: 1280 });
+  const state = demo.state;
+  // The observation's own round, kept open for the whole clip so the presses run to the end.
+  const board = { ...(state.board || {}), ends_at: Number(demo.captured_at) + 58, fetched_at: Number(demo.captured_at), live: false };
+  await (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve());
+  scene.update(state, board, 0);
+  window.__scene = scene;
+  window.__ready = true;
+</script>
+</body>
+</html>

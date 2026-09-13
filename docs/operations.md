@@ -1,6 +1,6 @@
 # Running and stopping Sat Rush Fly
 
-Use a dedicated wallet. Sat Rush Fly is an experiment capable of losing its entire allocated balance, and the game's fees make that the expected outcome over time. The funding cap is **100 USDC at initialization**.
+Use a dedicated wallet. Sat Rush Fly is an experiment capable of losing its entire allocated balance, and the game's fees make that the expected outcome over time. There is no funding cap: the wallet plays with whatever it holds, so fund it only with what you are willing to lose. `STONKFLY_LOSS_STOP` is the brake: the worker stops deploying once equity has fallen that far below the starting balance.
 
 ## Installation and data
 
@@ -25,9 +25,9 @@ python -m stonkfly run --frozen --steps 10 --out runs/frozen
 
 ## Wallet setup, performed by you
 
-1. Create a new Solana keypair: `python -m stonkfly keygen` (or `solana-keygen new -o satrush-keypair.json` if you have the Solana CLI). It prints the public address only. Fund that address with **at most 100 USDC** (mainnet mint `EPjF...Dt1v`) and about 0.02 SOL for fees. Do not use a wallet holding anything else. With Docker: `docker compose run --rm worker keygen --out /runs/satrush-keypair.json`, show it once with `docker compose run --rm worker cat /runs/satrush-keypair.json`, copy that array into `SATRUSH_KEYPAIR_JSON` in `.env`, and remove the file with `docker compose run --rm worker sh -c 'rm /runs/satrush-keypair.json'` if you keep the array elsewhere.
+1. Create a new Solana keypair: `python -m stonkfly keygen` (or `solana-keygen new -o satrush-keypair.json` if you have the Solana CLI). It prints the public address only. Fund that address with **only the USDC you are willing to lose** (mainnet mint `EPjF...Dt1v`) and about 0.02 SOL for fees. Do not use a wallet holding anything else. With Docker: `docker compose run --rm worker keygen --out /runs/satrush-keypair.json`, show it once with `docker compose run --rm worker cat /runs/satrush-keypair.json`, copy that array into `SATRUSH_KEYPAIR_JSON` in `.env`, and remove the file with `docker compose run --rm worker sh -c 'rm /runs/satrush-keypair.json'` if you keep the array elsewhere.
 2. Copy `.env.example` to `.env`, set `SATRUSH_KEYPAIR`, and set `STONKFLY_LIVE=I_ACCEPT_REAL_DEPLOYS`. On a hosted runner without a file system you control, set `SATRUSH_KEYPAIR_JSON` to the 64-byte array as an injected secret instead. The CLI also requires `--live`; paper mode never signs a transaction even if the variable is present.
-3. Run `python -m stonkfly run --live --preflight-only`. This reads the on-chain config, your SOL and USDC balances and your miner account, and initializes the local ledger. **It does not deploy.** The preflight refuses wallets holding more than 100 USDC (including unclaimed game balance) or less than 0.005 SOL.
+3. Run `python -m stonkfly run --live --preflight-only`. This reads the on-chain config, your SOL and USDC balances and your miner account, and initializes the local ledger. **It does not deploy.** The preflight refuses wallets holding less than 0.005 SOL. The starting balance it records is the wallet USDC plus any unclaimed game balance.
 4. Once you have reviewed the output, run `python -m stonkfly run --live` yourself. `--stake` (1-10 USDC), `--loss-stop`, `--daily-deploys` and `--priority-fee` adjust the limits within their bounds.
 5. `python -m stonkfly claim` moves settled USDC and sats shares from the game to the wallet. Claiming sats pays the vault's 10% exit fee. Winnings left unclaimed also fund later deploys.
 
@@ -37,7 +37,7 @@ Devnet (`--network devnet`) uses the game's devnet API, RPC and mints. Devnet US
 
 ## Execution guarantees and limits
 
-- Maximum initial funding: 100 USDC. Stake per round: 1-10 USDC, fixed for the run. At most 1,440 deploys per UTC day (default 300) and one deploy per round. No automation escrow, vault tickets, leverage or transfers are exposed.
+- No funding cap. Stake per round: 1-10 USDC, fixed for the run. At most 1,440 deploys per UTC day (default 300) and one deploy per round. No automation escrow, vault tickets, leverage or transfers are exposed.
 - A round is only played when it is active, not pending activation, and at least 40 slots (about 13 s) remain. The board is re-read after neural integration; a changed or closing round vetoes the deploy.
 - At 20 USDC drawdown from starting equity (wallet USDC plus unclaimed USDC plus the value of unclaimed sats), **stop new deploys**. A round already deployed still settles.
 - The ledger records the signed transaction signature before sending. An unconfirmed submission halts the worker; on restart, `reconcile` checks the signature and the deployment account before anything else. A rejected or expired transaction frees the round. A still-unknown outcome older than five minutes with no on-chain deployment is treated as failed; anything else stays halted for review.
@@ -91,6 +91,6 @@ To stop: Ctrl-C, or `touch runs/live/STOP` (`runs/paper/STOP` for paper). An alr
 
 For an ordinary clean restart, use the same command and run directory. After reviewing a transient failure, remove the STOP file if appropriate and pass `--resume-reviewed`. This cannot clear a loss stop or bypass an unresolved transaction.
 
-Updating the code does not stop a run: the worker logs `source_changed` with the files that differ and appends them to the ledger's `source_history`, so the audit still shows which code played which rounds. What a run cannot resume with is a different protocol: settings (stake, network, neural timing), dataset, readout cells, circuit rule, mode or feed. A paper run then archives itself beside the run directory (`paper-archive-<timestamp>`), logs `protocol_changed`, and starts a fresh ledger; the page's history starts over. A live run stops with "Run source/protocol changed" instead, because money is involved: start a fresh run directory or change the setting back.
+Updating the code does not stop a run: the worker logs `source_changed` with the files that differ and appends them to the ledger's `source_history`, so the audit still shows which code played which rounds. What a run cannot resume with is a different protocol: settings (stake, network, neural timing), dataset, readout cells, circuit rule, mode or feed. A paper run then archives itself beside the run directory (`paper-archive-<timestamp>`), logs `protocol_changed`, and starts a fresh ledger; the page's history starts over. A live run that has played stops with "the live run has played: use a separate run directory" instead, because money is involved: start a fresh run directory or change the setting back. A live ledger that never played (a start that failed before its first round, for example on a missing key) holds no money and is archived the same way (`live-archive-<timestamp>`).
 
 Runtime state, balances, wallet addresses, `.env` and keypair filenames are git-ignored. Keep custom key paths outside the repository. Tests use in-memory doubles and never sign or send real transactions.

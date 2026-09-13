@@ -40,9 +40,9 @@ The guard can veto a proposal for timing, budget, count or account-state reasons
 
 ## What changes with profit and loss
 
-When a round the fly played has settled, its result is the USDC refunded from losing tiles plus the USDC value of any BTC won (and, in live play, the API-reported RUSH token value) minus the amount deployed. A result of at least +0.01 USDC schedules a **200 ms, 20 mV-equivalent** artificial current into all **15 PAM11 (α1)** cells at the next observation. A result of at most −0.01 USDC schedules the same pulse into the **two PPL101 (γ1pedc)** cells. The pulse is binary above the threshold, not proportional to the amount. If several rounds settle before one observation, their results are summed once.
+When a round the fly played has settled, the signal is whether it hit: if the winning tile was among its picks, a **200 ms, 20 mV-equivalent** artificial current goes into all **15 PAM11 (α1)** cells at the next observation; if it missed, the same pulse goes into the **two PPL101 (γ1pedc)** cells. Money is deliberately not the signal: the 6% fee and the haircuts make even a hit a small loss in USDC, so a P&L rule punished every round. The pulse is binary, not proportional to anything. If several rounds settle before one observation, one pulse is given: reward if any of them hit.
 
-This is feedback about one round of a random draw, not evidence that the chosen tiles caused it. Fees count as a loss, so most rounds are aversive; a hit on a sparsely selected board is a reward. Wallet deposits and claims never become rewards: only settled deployments do.
+This is feedback about one round of a random draw, not evidence that the chosen tiles caused it. Picking more tiles hits more often and so is rewarded more often; nothing about the reward tracks profit. Wallet deposits and claims never become rewards: only settled deployments do.
 
 The candidate memory rule acts on **7,835 existing KC→MBON07/MBON11 edges**. It adapts a baseline-centered anti-Hebbian rate rule from [Huang, Luo et al., 2024](https://doi.org/10.1038/s41586-024-07819-w): recent KC activity followed by dopamine tends to depress eligible connections; the reverse timing can potentiate them. Actual network spikes supply KC/DAN rates in bins of at most 10 ms. No price or profit value directly edits a synaptic weight.
 

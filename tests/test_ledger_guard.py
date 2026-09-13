@@ -83,7 +83,14 @@ def test_refund_only_open_intents(env):
 
 
 @pytest.mark.parametrize(
-    "pnl,expected", [("0.03", "reward"), ("-0.03", "aversive"), ("0.001", "none"), ("0", "none")]
+    "outcomes,expected",
+    [
+        ([{"won": True, "pnl_usd": "-0.011"}], "reward"),   # a hit is rewarded even though fees make it a small loss
+        ([{"won": False, "pnl_usd": "-0.11"}], "aversive"),
+        ([{"won": False}, {"won": True}], "reward"),          # several rounds settled at once: any hit rewards
+        ([{"won": None}], "none"),
+        ([], "none"),
+    ],
 )
-def test_explicit_feedback(pnl, expected):
-    assert reinforcement(pnl, ".01")[0] == expected
+def test_reinforcement_follows_the_hit(outcomes, expected):
+    assert reinforcement(outcomes) == expected

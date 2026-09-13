@@ -31,6 +31,7 @@ def main():
     run.add_argument("--steps", type=int, default=0, help="Observations to make; 0 keeps running")
     run.add_argument("--frozen", action="store_true", help="Freeze all memory efficacies for a control run")
     run.add_argument("--out", type=Path)
+    run.add_argument("--capital", default="100", help="Paper starting balance and loss-stop ceiling in USDC (up to 1000)")
     run.add_argument("--stake", default="1", help="USDC per round (1-10)")
     run.add_argument("--loss-stop", default="20", help="Stop deploying after this USDC drawdown")
     run.add_argument("--daily-deploys", type=int, default=300)
@@ -101,6 +102,7 @@ def main():
         p.error("steps cannot be negative")
     settings = Settings(
         network=a.network,
+        capital=a.capital,
         stake=a.stake,
         loss_stop=a.loss_stop,
         daily_deploys=a.daily_deploys,
@@ -119,25 +121,28 @@ def main():
     from .ledger import Ledger
     from .satrush.api import ENDPOINTS, FixtureApi, SatRushApi
 
-    def archive_paper_run(reason):
-        # A paper run whose settings or protocol changed cannot continue its
-        # ledger. Archive it beside the run and start fresh, so an update never
-        # strands the worker. Live runs stop instead: money is involved.
+    def archive_run(reason):
+        # A run whose settings or protocol changed cannot continue its ledger.
+        # Archive it beside the run and start fresh, so an update never strands
+        # the worker. A live run that has played stops instead: money is
+        # involved. One that never played (a failed start) holds no money.
         nonlocal lock
+        if a.live and not Ledger.never_played(out / "ledger.sqlite"):
+            raise RuntimeError(f"{reason}; the live run has played: use a separate run directory")
         archive = out.parent / f"{out.name}-archive-{time.strftime('%Y%m%d-%H%M%S')}"
         out.rename(archive)
         out.mkdir()
         lock = (out / "worker.lock").open("a")
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        print(json.dumps({"protocol_changed": True, "reason": reason, "archived": str(archive), "note": "paper run restarted from a fresh ledger"}), flush=True)
+        print(json.dumps({"protocol_changed": True, "reason": reason, "archived": str(archive), "note": "run restarted from a fresh ledger"}), flush=True)
 
     try:
         ledger = Ledger(out / "ledger.sqlite", settings, "live" if a.live else "paper")
     except RuntimeError as e:
-        if a.live or "mismatch" not in str(e):
+        if "mismatch" not in str(e):
             raise
-        archive_paper_run(str(e))
-        ledger = Ledger(out / "ledger.sqlite", settings, "paper")
+        archive_run(str(e))
+        ledger = Ledger(out / "ledger.sqlite", settings, "live" if a.live else "paper")
     playing = False  # Only a failure while playing halts the ledger; a bad .env is not a state to reconcile.
     try:
         api = (
@@ -178,6 +183,7 @@ def main():
             "mode": player.mode,
             "feed": "fixture" if a.fixture else f"satrush-public-{a.network}",
             "game": "SatRush: one deploy per round over the neurally selected tiles; fixed stake; no strategy layer.",
+            "reinforcement": "hit (winning tile among the picks): 200 ms pulse into 15 PAM11 cells; miss: the same pulse into 2 PPL101 cells; money is not the signal",
             "learning_validated": False,
             "pain_receptors_modeled": False,
             "timing": "Each round advances configured neural_ms regardless of wall time; no claim of real-time fly physiology.",
@@ -189,12 +195,10 @@ def main():
         try:
             changed = reconcile_provenance(ledger, out, provenance)
         except RuntimeError:
-            if a.live:
-                raise
             ledger.close()
-            archive_paper_run("Run source/protocol changed")
-            ledger = Ledger(out / "ledger.sqlite", settings, "paper")
-            player = paper_player(settings, ledger, api)
+            archive_run("Run source/protocol changed")
+            ledger = Ledger(out / "ledger.sqlite", settings, "live" if a.live else "paper")
+            player = live_player(settings, ledger, api, a.network) if a.live else paper_player(settings, ledger, api)
             changed = reconcile_provenance(ledger, out, provenance)
         if changed:
             print(json.dumps({"source_changed": changed, "note": "protocol unchanged; the run continues"}), flush=True)
@@ -262,7 +266,7 @@ def keygen_file(path):
     return {
         "address": str(keypair.pubkey()),
         "file": str(path),
-        "next": "Fund this address with at most 100 USDC and about 0.02 SOL. Keep the file private; "
+        "next": "Fund this address with the USDC you are willing to lose and about 0.02 SOL. Keep the file private; "
         "for Docker put its contents in SATRUSH_KEYPAIR_JSON in .env.",
     }
 

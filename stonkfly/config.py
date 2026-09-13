@@ -25,7 +25,7 @@ def down(value, step):
 @dataclass(frozen=True)
 class Settings:
     network: str = "mainnet"
-    capital: str = "100"  # Maximum USDC the dedicated wallet may hold at start.
+    capital: str = "100"  # Paper starting balance in USDC and the ceiling for the loss stop; live play uses the wallet as it is.
     stake: str = "1"  # USDC deployed per round, split evenly across chosen tiles.
     loss_stop: str = "20"
     daily_deploys: int = 300
@@ -35,7 +35,6 @@ class Settings:
     neural_bin_ms: float = 10
     pulse_ms: float = 200
     pulse_current: float = 20
-    reward_deadband: str = "0.01"
     min_tiles: int = 1
     max_tiles: int = 21
     priority_fee_microlamports: int = 0
@@ -44,8 +43,8 @@ class Settings:
     def __post_init__(self):
         if self.network not in ("mainnet", "devnet"):
             raise ValueError("network must be mainnet or devnet")
-        if not 0 < D(self.capital) <= 100:
-            raise ValueError("Maximum capital 100 USDC")
+        if not 0 < D(self.capital) <= 1000:
+            raise ValueError("Maximum capital 1000 USDC")
         if not 1 <= D(self.stake) <= min(D(self.capital), D(10)):
             raise ValueError("Stake must be between the 1 USDC program minimum and 10 USDC")
         if D(self.stake) != down(self.stake, "0.000001"):
@@ -58,8 +57,6 @@ class Settings:
             raise ValueError("min_slots_remaining: 5-150 slots")
         if not math.isfinite(self.max_board_age) or self.max_board_age <= 0:
             raise ValueError("Positive board age limit required")
-        if D(self.reward_deadband) <= 0:
-            raise ValueError("Positive reinforcement deadband required")
         if not (
             type(self.min_tiles) is int
             and type(self.max_tiles) is int
