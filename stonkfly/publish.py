@@ -200,6 +200,7 @@ def _round_row(row):
         "refund": _money(outcome["refund_usd"]) if outcome.get("refund_usd") is not None else None,
         "sats": outcome.get("sats"),
         "sats_usd": _money(outcome["sats_usd"]) if outcome.get("sats_usd") is not None else None,
+        "token": str(D(outcome["token"])) if outcome.get("token") is not None else None,
         "token_usd": _money(outcome["token_usd"]) if outcome.get("token_usd") is not None else None,
         "strike": bool(outcome.get("strike")) if outcome else None,
         "strike_usd": _money(outcome["strike_usd"]) if outcome.get("strike_usd") is not None else None,
@@ -254,6 +255,8 @@ def snapshot(out, now=None):
     strikes_hit = sum(1 for d in won if d["outcome"].get("strike"))
     strike_usd_total = sum((D(d["outcome"].get("strike_usd") or 0) for d in settled), D(0))
     hashrate_total = sum(int(d["outcome"].get("hashrate") or 0) for d in settled)
+    rush_total = sum((D(d["outcome"].get("token") or 0) for d in settled), D(0))
+    rush_usd_total = sum((D(d["outcome"].get("token_usd") or 0) for d in settled), D(0))
     day_start = now - now % 86400
     deploys_today = sum(1 for d in deployments if d["created"] >= day_start and d["status"] != "FAILED")
     history = [{"time": e["wall_time"], "equity": e["equity_usdc"]} for e in events if "equity_usdc" in e]
@@ -347,6 +350,8 @@ def snapshot(out, now=None):
             "strikes_hit": strikes_hit,
             "strike_won_usd": _money(strike_usd_total),
             "hashrate": hashrate_total,
+            "rush_won": str(rush_total),
+            "rush_won_usd": _money(rush_usd_total),
             "vaults": meta.get("vault_positions"),
         },
         "rounds": [_round_row(d) for d in deployments[:30]],

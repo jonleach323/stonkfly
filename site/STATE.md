@@ -62,6 +62,7 @@ with six decimals. Times are Unix seconds (floats). `null` means unknown.
     "open_rounds": [55681],
     "strikes_played": 1, "strikes_hit": 0, "strike_won_usd": "0",   // Sat Strike rounds the fly played / hit, bonus won
     "hashrate": 0,                     // hashrate earned (live settlements report it; paper cannot)
+    "rush_won": "0.017847403", "rush_won_usd": "1.053324",   // RUSH minted to the wallet by its deploys, and its value at settlement
     "vaults": null | {                 // live only: the wallet's standing, read from the public API
       "epoch": { "iteration": 14, "tickets": 120, "rank": null, "won": false, "won_usd": 0 } | null,
       "one_btc": { "iteration": 2, "tickets": 3, "won": false } | null,
@@ -78,7 +79,7 @@ with six decimals. Times are Unix seconds (floats). `null` means unknown.
       "refund": null | "0.801000", "sats": null | 247, "sats_usd": null | "0.190712",
       "token_usd": null | "0.020000", "fee": null | "0.060000", "pnl": null | "-0.008288",
       "strike": null | false | true,    // the round was a Sat Strike (its bonus is inside refund/sats/pnl)
-      "strike_usd": null | "0", "hashrate": null | 0,
+      "strike_usd": null | "0", "hashrate": null | 0, "token": null | "0.017847403",
       "simulated": null | true | false  // true = paper settlement from real round results
     }
   ],

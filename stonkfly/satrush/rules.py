@@ -17,6 +17,8 @@ TILES = 21
 HAIRCUT_BPS = 500
 BPS = 10_000
 SATS_PER_BTC = 100_000_000
+RUSH_DECIMALS = 9  # the RUSH mint SATqS9DYpLQsM2z51P4QCoqJRHa5wboV4qjJerJRUSH
+
 
 
 def tiles_from_mask(mask):
@@ -184,6 +186,7 @@ def outcome_from_record(record, btc_price, round_json=None):
         else D(sats) / D(SATS_PER_BTC) * D(btc_price)
     )
     token_usd = D(record.get("token_earned_usd") or 0)
+    token = D(record.get("token_earned") or 0) / D(10**RUSH_DECIMALS)  # RUSH minted to the deployer
     pnl = refund + sats_usd + token_usd - deployed
     return {
         "won": bool(record["is_won"]),
@@ -192,6 +195,7 @@ def outcome_from_record(record, btc_price, round_json=None):
         "refund_usd": str(refund),
         "sats": sats,
         "sats_usd": str(sats_usd.quantize(Decimal("0.000001"))),
+        "token": str(token),
         "token_usd": str(token_usd),
         "hashrate": int(record.get("hashrate_earned") or 0),
         "strike": bool((round_json or {}).get("is_sat_strike")),

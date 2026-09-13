@@ -39,6 +39,7 @@ function num(x) {
 }
 function pad(n) { return String(n).padStart(2, "0"); }
 function fmtInt(x) { const v = num(x); return v === null ? "—" : intFmt.format(Math.round(v)); }
+function fmtRush(x) { const v = num(x); return v === null ? "0" : v >= 100 ? intFmt.format(Math.round(v)) : v >= 1 ? v.toFixed(2) : v.toFixed(4); }
 function roundTo(v, digits) { const f = 10 ** digits; return Math.round(v * f) / f; }
 // Sign after rounding, so a sub-cent value never prints as "+$0.00" or "-$0.00"; per-round P&L uses 4 decimals.
 function fmtMoney(x, { sign = false, digits = 2 } = {}) {
@@ -292,7 +293,7 @@ function renderWaiting() {
 /** The worker started over (a not-ready snapshot after a ready one): drop every number from the old one. */
 function resetReady() {
   app.roundsKey = ""; app.decisionsKey = ""; app.chartKey = ""; app.frameSha = null;
-  for (const id of ["pnl", "in-play", "h-cash", "h-inplay", "h-sats", "h-rounds", "h-hit", "h-strikes", "h-tickets", "h-hashrate", "s-cash", "s-fees", "s-refunds", "s-sats", "s-best", "perf-chip", "b-spikes", "b-edges", "b-time"]) setText(id, "—");
+  for (const id of ["pnl", "in-play", "h-cash", "h-inplay", "h-sats", "h-rounds", "h-hit", "h-strikes", "h-tickets", "h-hashrate", "h-rush", "s-cash", "s-fees", "s-refunds", "s-sats", "s-best", "perf-chip", "b-spikes", "b-edges", "b-time"]) setText(id, "—");
   for (const id of ["pnl", "s-best"]) { const n = $(id); if (n) n.className = "num"; }
   setChip("perf-chip", "—", "");
   setText("value-unit", "USDC");
@@ -497,6 +498,12 @@ function renderHoldings(s) {
     if (s.mode !== "live") replaceChildren(hashrate, ["—", el("small", { text: "NO WALLET" })]);
     else replaceChildren(hashrate, [`${fmtInt(hr ?? 0)} HR`, el("small", { text: `${fmtInt(p.rounds_played ?? 0)} ROUNDS` })]);
   }
+  // RUSH: the game's token, minted to the deployer each round; the API prices it at settlement.
+  const rush = $("h-rush");
+  if (rush) {
+    if (s.mode !== "live") replaceChildren(rush, ["—", el("small", { text: "NO WALLET" })]);
+    else replaceChildren(rush, [`${fmtRush(p.rush_won)} RUSH`, el("small", { text: fmtMoney(p.rush_won_usd) })]);
+  }
 }
 
 function renderRounds(s) {
@@ -527,7 +534,7 @@ function renderRounds(s) {
     // Live settlements add the RUSH token value the API reports to the round's P&L; say so where it happens.
     const pnlCell = el("td", { class: signClass(r.pnl, 4) }, [fmtMoney(r.pnl, { sign: true, digits: 4 })]);
     const token = num(r.token_usd);
-    if (token) pnlCell.append(el("small", { text: `incl. ${fmtMoney(token, { digits: 4 })} RUSH` }));
+    if (token) pnlCell.append(el("small", { text: `incl. ${fmtRush(r.token)} RUSH (${fmtMoney(token, { digits: 4 })})` }));
     const strikeUsd = num(r.strike_usd);
     if (strikeUsd) pnlCell.append(el("small", { text: `incl. ${fmtMoney(strikeUsd)} strike bonus` }));
     const hr = num(r.hashrate);

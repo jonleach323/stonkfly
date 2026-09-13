@@ -66,6 +66,7 @@ def test_implied_price_and_record_outcome():
     winner = next(r for r in ROUND["deployments"] if r["is_won"])
     out = outcome_from_record(winner, price)
     assert out["won"] and out["sats"] == int(winner["btc_earned"])
+    assert float(out["token"]) * 10**9 == int(winner["token_earned"])  # RUSH has nine decimals
     # Even a full-board winner loses money after fees: no free lunch.
     assert float(out["pnl_usd"]) < 0
     loser = next(r for r in ROUND["deployments"] if not r["is_won"])
