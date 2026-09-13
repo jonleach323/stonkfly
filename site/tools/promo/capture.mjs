@@ -1,5 +1,5 @@
-// Render the fly scene, nothing else, frame by frame into PNGs with a virtual
-// clock, then encode an MP4 for social posts. Needs the global playwright package and an ffmpeg
+// Render the fly scene with the title mark, frame by frame into PNGs with a
+// virtual clock, then encode an MP4 for social posts. Needs the global playwright package and an ffmpeg
 // with libx264 (FFMPEG env or `pip install imageio-ffmpeg`).
 //
 //   python site/tools/demo.py --run runs/paper --out /tmp/promo --no-live-board

@@ -7,10 +7,12 @@
 <style>
   html, body { margin: 0; width: 1280px; height: 720px; overflow: hidden; background: #060709; }
   #output { position: absolute; inset: 0; width: 1280px; height: 720px; display: block; }
+  .mark { position: absolute; left: 44px; top: 40px; font-family: "Space Mono", monospace; font-size: 34px; letter-spacing: 3px; color: #f3f4ed; text-shadow: 2px 2px 0 rgba(0,0,0,0.6); }
 </style>
 </head>
 <body>
 <canvas id="output"></canvas>
+<div class="mark">SAT RUSH FLY</div>
 <script src="demo-data.js"></script>
 <script type="module">
   import { startScene } from './scene.js';
@@ -23,6 +25,7 @@
   await (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve());
   scene.update(state, board, 0);
   window.__scene = scene;
+
   window.__ready = true;
 </script>
 </body>
