@@ -235,7 +235,6 @@ strong { color: var(--ink); }
   .holdings, .stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .holdings > div, .stats > div, .holdings > div:nth-child(n + 4), .stats > div:nth-child(n + 4) { grid-column: span 1; }
 }
-.holdings-note { margin-top: -6px; }
 .holdings dd, .stats dd { margin: 4px 0 0; font: 700 14px/1.3 var(--mono); overflow-wrap: anywhere; }
 .holdings dd small, .stats dd small { display: block; font: 12px/1.4 var(--mono); font-weight: 400; color: var(--muted); }
 
